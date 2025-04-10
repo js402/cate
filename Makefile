@@ -37,7 +37,7 @@ ui-build: ui-package
 	yarn build
 
 ui-run: ui-build wait-for-server
-	yarn workspace frontend run dev
+	yarn workspace frontend run dev --host
 
 api-init:
 	python3 -m venv apitests/.venv
