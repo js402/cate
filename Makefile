@@ -46,5 +46,5 @@ api-init:
 	python3 -m venv apitests/.venv
 	. apitests/.venv/bin/activate && pip install -r apitests/requirements.txt
 
-api-test: run wait-for-server
+api-test: run
 	. apitests/.venv/bin/activate && pytest apitests/
