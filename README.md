@@ -45,31 +45,32 @@ Below is a brief "Dev Environment" section you can add to your documentation. It
 
 ## Starting the Development Environment
 
-1. **Prepare the Environment**
-   - Copy and edit `.env-example` into a new `.env` file with the proper configuration.
-   - Install prerequisites: Docker, Docker Compose, Yarn, and Go.
+1.  **Prepare the Environment**
+    * Copy and edit `.env-example` into a new `.env` file with the proper configuration.
+    * Install prerequisites: Docker, Docker Compose, Yarn, and Go.
 
-2. **Build and Run the Backend Services**
-   - Run the following to build Docker images and start all services:
-     ```bash
-     make run
-     ```
-   - Use `make logs` to tail the backend logs if needed.
+2.  **Build and Run the Backend Services**
+    * Run the following to build Docker images and start all services:
+        ```bash
+        make run
+        ```
+    * Use `make logs` to tail the backend logs if needed.
 
-3. **Run the Frontend & UI**
-   - The UI dev server is bundled with the backend (proxied via the BFF).
-   - To start the UI development workflow, run:
-     ```bash
-     make ui-run
-     ```
-   - This will build the UI and wait for the backend to be ready before launching the Vite dev server.
+3.  **Run the Frontend & UI**
+    * The backend includes a proxy (Backend-for-Frontend/BFF) to handle UI requests and authentication cookies correctly.
+    * Start the UI development workflow, which builds UI components and runs the Vite dev server:
+        ```bash
+        make ui-run
+        ```
+    * Once Vite is running (you'll see its output in the terminal, often mentioning a port like 5173), **access the application in your browser via the main backend URL** (e.g., `http://localhost:8080` or as configured in your `.env` file or docker-compose port mappings).
+    * **Important:** Do *not* use the local URL Vite might display (like `localhost:5173`), as login and other authenticated features will not work correctly through it due to how browser cookies are handled. Always access the UI through the backend's address during development.
 
-4. **API Tests Setup & Execution**
-   - Initialize the Python virtual environment and install API test dependencies:
-     ```bash
-     make api-init
-     ```
-   - Run your API tests via:
-     ```bash
-     make api-test
-     ```
+4.  **API Tests Setup & Execution**
+    * Initialize the Python virtual environment and install API test dependencies:
+        ```bash
+        make api-init
+        ```
+    * Run your API tests via:
+        ```bash
+        make api-test
+        ```
