@@ -84,7 +84,7 @@ func TestAESCBCHMAC_EncryptDecrypt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cypher, err := testEncryptCBC(t, tc.encryptionKey, tc.integrityKey, tc.plaintext)
 			if fmt.Sprint(err) != fmt.Sprint(tc.expectedError) {
-				t.Fatalf(fmt.Sprintf("expected %s %s %s", tc.expectedError, "got", err.Error()))
+				t.Fatalf("expected %v got %v", tc.expectedError, err)
 			}
 			if tc.expectedError != nil {
 				return
@@ -150,7 +150,7 @@ func TestGCM_EncryptDecrypt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cypher, err := testEncryptGCM(t, tc.encryptionKey, tc.integrityKey, tc.plaintext)
 			if fmt.Sprint(err) != fmt.Sprint(tc.expectedError) {
-				t.Fatalf(err.Error())
+				t.Fatalf("expected %v got %v", tc.expectedError, err)
 			}
 			if tc.expectedError != nil {
 				return
@@ -199,7 +199,7 @@ func TestAESCBCHMAC_Ciphertext(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			decryptedText, err := testDecryptCBC(t, tc.encryptionKey, tc.integrityKey, tc.cypher)
 			if fmt.Sprint(err) != fmt.Sprint(tc.expectedError) {
-				t.Fatalf(err.Error())
+				t.Fatalf("expected %v got %v", tc.expectedError, err)
 			}
 			if tc.expectedError != nil {
 				return
@@ -232,7 +232,7 @@ func TestAESCBCHMAC_CiphertextIsRandomized(t *testing.T) {
 			for i := range cyphers {
 				cypher, err := testEncryptCBC(t, tc.encryptionKey, tc.integrityKey, tc.plaintext)
 				if fmt.Sprint(err) != fmt.Sprint(tc.expectedError) {
-					t.Fatalf(err.Error())
+					t.Fatalf("expected %v got %v", tc.expectedError, err)
 				}
 				cyphers[i] = cypher
 			}
