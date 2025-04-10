@@ -4,12 +4,12 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverops"
-	"github.com/js402/CATE/internal/serverops/state"
 	"github.com/js402/CATE/internal/services/chatservice"
 )
 
-func AddChatRoutes(mux *http.ServeMux, _ *serverops.Config, chatManager *chatservice.Service, stateService *state.State) {
+func AddChatRoutes(mux *http.ServeMux, _ *serverops.Config, chatManager *chatservice.Service, stateService *runtimestate.State) {
 	h := &chatManagerHandler{manager: chatManager, stateService: stateService}
 
 	mux.HandleFunc("POST /chats", h.createChat)
@@ -21,7 +21,7 @@ func AddChatRoutes(mux *http.ServeMux, _ *serverops.Config, chatManager *chatser
 
 type chatManagerHandler struct {
 	manager      *chatservice.Service
-	stateService *state.State
+	stateService *runtimestate.State
 }
 
 type newChatInstanceRequest struct {
@@ -98,7 +98,7 @@ func (h *chatManagerHandler) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := h.manager.Chat(ctx, chatID, model, req.Message)
+	reply, err := h.manager.Chat(ctx, chatID, req.Message, model)
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.ServerOperation)
 		return

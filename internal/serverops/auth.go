@@ -14,13 +14,13 @@ const DefaultDefaultServiceGroup = "admin_panel"
 const DefaultAdminUser = "admin@admin.com"
 
 // CheckResourceAuthorization checks if the user has the required permission for a given resource.
-func CheckResourceAuthorization[T libauth.Authz](ctx context.Context, resource string, requiredPermission store.Permission) error {
+func CheckResourceAuthorization(ctx context.Context, resource string, requiredPermission store.Permission) error {
 	if instance := GetManagerInstance(); instance == nil {
 		return fmt.Errorf("BUG: Service Manager was not initialized")
 	}
 	if instance := GetManagerInstance(); instance != nil && instance.IsSecurityEnabled(DefaultServerGroup) {
 		// Get the access entries for the user from the token
-		accessList, err := libauth.GetClaims[T](ctx, instance.GetSecret())
+		accessList, err := libauth.GetClaims[store.AccessList](ctx, instance.GetSecret())
 		if err != nil {
 			return fmt.Errorf("failed to get user claims: %w", err)
 		}
@@ -40,9 +40,6 @@ func CheckResourceAuthorization[T libauth.Authz](ctx context.Context, resource s
 }
 
 func CheckServiceAuthorization[T ServiceMeta](ctx context.Context, s T, permission store.Permission) error {
-	if instance := GetManagerInstance(); instance == nil {
-		return fmt.Errorf("BUG: Service Manager was not initialized")
-	}
 	instance := GetManagerInstance()
 	if instance == nil {
 		return fmt.Errorf("BUG: Service Manager was not initialized")
@@ -73,7 +70,7 @@ func CheckServiceAuthorization[T ServiceMeta](ctx context.Context, s T, permissi
 	return fmt.Errorf("service %s is not authorized: %w", s.GetServiceName(), libauth.ErrNotAuthorized)
 }
 
-func CreateAuthToken[T libauth.Authz](subject string, permissions T) (string, time.Time, error) {
+func CreateAuthToken(subject string, permissions store.AccessList) (string, time.Time, error) {
 	instance := GetManagerInstance()
 	if instance == nil {
 		return "", time.Time{}, fmt.Errorf("BUG: Service Manager was not initialized")
@@ -84,7 +81,7 @@ func CreateAuthToken[T libauth.Authz](subject string, permissions T) (string, ti
 		JWTExpiry: instance.GetTokenExpiry(),
 	}
 	// Delegate token creation to libauth.
-	token, expiresAt, err := libauth.CreateToken[T](cfg, subject, permissions)
+	token, expiresAt, err := libauth.CreateToken[store.AccessList](cfg, subject, permissions)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to create token: %w", err)
 	}
@@ -101,9 +98,6 @@ func RefreshToken(ctx context.Context) (string, bool, time.Time, error) {
 }
 
 func RefreshPlainToken(ctx context.Context, token string, withGracePeriod *time.Duration) (string, bool, time.Time, error) {
-	if instance := GetManagerInstance(); instance == nil {
-		return "", false, time.Time{}, fmt.Errorf("BUG: Service Manager was not initialized")
-	}
 	instance := GetManagerInstance()
 	if instance == nil {
 		return "", false, time.Time{}, fmt.Errorf("BUG: Service Manager was not initialized")
@@ -129,4 +123,21 @@ func RefreshPlainToken(ctx context.Context, token string, withGracePeriod *time.
 	}
 
 	return tokenString, wasReplaced, expiresAt, nil
+}
+
+// GetIdentity extracts the identity from the context using the JWT secret from the ServiceManager.
+func GetIdentity(ctx context.Context) (string, error) {
+	manager := GetManagerInstance()
+	if manager == nil {
+		return "", fmt.Errorf("service manager is not initialized")
+	}
+	if !manager.IsSecurityEnabled(DefaultServerGroup) {
+		return DefaultAdminUser, nil
+	}
+	jwtSecret := manager.GetSecret()
+	if jwtSecret == "" {
+		return "", libauth.ErrEmptyJWTSecret
+	}
+
+	return libauth.GetIdentity[store.AccessList](ctx, jwtSecret)
 }

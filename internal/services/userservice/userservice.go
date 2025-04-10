@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"dario.cat/mergo"
@@ -39,6 +40,24 @@ func New(db libdb.DBManager, config *serverops.Config) *Service {
 	}
 }
 
+func (s *Service) GetUserFromContext(ctx context.Context) (*store.User, error) {
+	identity, err := serverops.GetIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve user by ID.
+	user, err := s.getUserBySubject(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+
+	user.HashedPassword = ""
+	user.RecoveryCodeHash = ""
+
+	return user, nil
+}
+
 // Login authenticates a user given an email and password, and returns a JWT on success.
 // It verifies the password, loads permissions, and generates a JWT token.
 func (s *Service) Login(ctx context.Context, email, password string) (*Result, error) {
@@ -69,7 +88,7 @@ func (s *Service) Login(ctx context.Context, email, password string) (*Result, e
 	}
 
 	// Use the serverops helper to generate the JWT.
-	token, expiresAt, err := serverops.CreateAuthToken[store.AccessList](user.Subject, permissions)
+	token, expiresAt, err := serverops.CreateAuthToken(user.Subject, permissions)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +128,7 @@ func (s *Service) Register(ctx context.Context, req CreateUserRequest) (*Result,
 	}
 
 	// Use the serverops helper to generate the token.
-	token, expiresAt, err := serverops.CreateAuthToken[store.AccessList](userFromStore.Subject, permissions)
+	token, expiresAt, err := serverops.CreateAuthToken(userFromStore.Subject, permissions)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +211,10 @@ func (s *Service) GetUserByID(ctx context.Context, id string) (*store.User, erro
 		return nil, err
 	}
 
+	return s.getUserByID(ctx, id)
+}
+
+func (s *Service) getUserByID(ctx context.Context, id string) (*store.User, error) {
 	tx := s.dbInstance.WithoutTransaction()
 	user, err := store.New(tx).GetUserByID(ctx, id)
 	if err != nil {
@@ -212,6 +235,10 @@ func (s *Service) GetUserBySubject(ctx context.Context, subject string) (*store.
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return nil, err
 	}
+	return s.getUserBySubject(ctx, subject)
+}
+
+func (s *Service) getUserBySubject(ctx context.Context, subject string) (*store.User, error) {
 	tx := s.dbInstance.WithoutTransaction()
 	user, err := store.New(tx).GetUserBySubject(ctx, subject)
 	if err != nil {
@@ -232,7 +259,12 @@ func (s *Service) UpdateUserFields(ctx context.Context, id string, req UpdateUse
 		return nil, err
 	}
 
-	tx, commit, err := s.dbInstance.WithTransaction(ctx)
+	tx, commit, rTx, err := s.dbInstance.WithTransaction(ctx)
+	defer func() {
+		if err := rTx(); err != nil {
+			log.Println("failed to rollback transaction", err)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +327,12 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return err
 	}
-	tx, commit, err := s.dbInstance.WithTransaction(ctx)
+	tx, commit, rTx, err := s.dbInstance.WithTransaction(ctx)
+	defer func() {
+		if err := rTx(); err != nil {
+			log.Println("failed to rollback transaction", err)
+		}
+	}()
 	if err != nil {
 		return err
 	}

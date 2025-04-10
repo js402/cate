@@ -1,4 +1,4 @@
-package state_test
+package runtimestate_test
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/internal/serverops/state"
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverops/store"
 	"github.com/js402/CATE/libs/libbus"
 	"github.com/js402/CATE/libs/libdb"
@@ -30,7 +30,7 @@ func TestStateLogic(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB()
 
-	dbInstance, err := libdb.NewPostgresDBManager(dbConn, store.Schema)
+	dbInstance, err := libdb.NewPostgresDBManager(ctx, dbConn, store.Schema)
 	require.NoError(t, err)
 
 	dbStore := store.New(dbInstance.WithoutTransaction())
@@ -53,7 +53,8 @@ func TestStateLogic(t *testing.T) {
 	ps, cleanup2 := libbus.NewTestPubSub(t)
 	defer cleanup2()
 
-	backendState := state.New(dbInstance, ps)
+	backendState, err := runtimestate.New(ctx, dbInstance, ps)
+	require.NoError(t, err)
 	triggerChan := make(chan struct{}, 10)
 
 	// Create a breaker instance with an example threshold and reset timeout.
@@ -87,6 +88,12 @@ func TestStateLogic(t *testing.T) {
 	require.Contains(t, stateMsg, `"name":"myLLama"`)
 	require.Contains(t, stateMsg, `"models":["granite-embedding:30m"]`)
 
+	// // Verify queue processing: ensure that there is no item in progress.
+	// require.Eventually(t, func() bool {
+	// 	current := backendState.InPorgressQueueState()
+	// 	return current == nil
+	// }, 20*time.Second, 100*time.Millisecond)
+
 	// Trigger final sync and verify model pull
 	triggerChan <- struct{}{}
 	require.Eventually(t, func() bool {
@@ -106,14 +113,15 @@ func TestBackendDeletion(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanupDB()
 
-	dbInstance, err := libdb.NewPostgresDBManager(dbConn, store.Schema)
+	dbInstance, err := libdb.NewPostgresDBManager(ctx, dbConn, store.Schema)
 	require.NoError(t, err)
 
 	dbStore := store.New(dbInstance.WithoutTransaction())
 	ps, cleanup2 := libbus.NewTestPubSub(t)
 	defer cleanup2()
 
-	backendState := state.New(dbInstance, ps)
+	backendState, err := runtimestate.New(ctx, dbInstance, ps)
+	require.NoError(t, err)
 	triggerChan := make(chan struct{}, 10)
 
 	breaker := libroutine.NewRoutine(3, 10*time.Second)

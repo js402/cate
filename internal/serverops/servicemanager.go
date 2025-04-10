@@ -1,16 +1,20 @@
 package serverops
 
 import (
-	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/js402/CATE/libs/libauth"
 )
 
-var ServiceManagerInstance atomic.Pointer[ServiceManager]
+// serviceManagerInstance holds a globally accessible instance of ServiceManager.
+//
+// This singleton pattern is intentional: it ensures that all service-layer components
+// reference the same in-memory instance, which allows us to:
+//
+//   - Safely share auth configuration and secrets across all subsystems.
+//   - Enable possible addition of runtime updates, later.
+//   - It allows for centralized management of service metadata without requiring persistent storage.
+var serviceManagerInstance atomic.Pointer[ServiceManager]
 
 var _ ServiceManager = &serviceManager{}
 
@@ -42,13 +46,14 @@ func NewServiceManager(config *Config) error {
 	if err != nil {
 		return err
 	}
+
 	var s ServiceManager = &serviceManager{
 		services: make([]ServiceMeta, 0),
 		config:   config,
 		mu:       sync.RWMutex{},
 		expriry:  expriry,
 	}
-	ServiceManagerInstance.Store(&s)
+	serviceManagerInstance.Store(&s)
 
 	return nil
 }
@@ -94,23 +99,8 @@ func (r *serviceManager) GetTokenExpiry() time.Duration {
 }
 
 func GetManagerInstance() ServiceManager {
-	if instance := ServiceManagerInstance.Load(); instance != nil {
+	if instance := serviceManagerInstance.Load(); instance != nil {
 		return *instance
 	}
 	return nil
-}
-
-// GetIdentity extracts the identity from the context using the JWT secret from the ServiceManager.
-func GetIdentity[T libauth.Authz](ctx context.Context) (string, error) {
-	manager := GetManagerInstance()
-	if manager == nil {
-		return "", fmt.Errorf("service manager is not initialized")
-	}
-
-	jwtSecret := manager.GetSecret()
-	if jwtSecret == "" {
-		return "", libauth.ErrEmptyJWTSecret
-	}
-
-	return libauth.GetIdentity[T](ctx, jwtSecret)
 }

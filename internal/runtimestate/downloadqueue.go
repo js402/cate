@@ -1,4 +1,4 @@
-package state
+package runtimestate
 
 import (
 	"context"
@@ -13,10 +13,20 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
+// dwqueue manages the persistence and retrieval of model download tasks
+// using the provided database instance (`dbInstance`).
 type dwqueue struct {
 	dbInstance libdb.DBManager
 }
 
+// add enqueues one or more download tasks for the specified models from a given backend URL.
+// It stores these tasks persistently using the underlying dbInstance.
+//
+// Rationale for Job ID: It uses the backend's base URL (u.String()) as the Job ID
+// in the persistent queue. Because "Sync Cycle is the Source of Truth" -> the sync
+// cycle will run again and will re-detect all currently missing models,
+// the queue doesn't need to persistently store a comprehensive list
+// of every single model that needs downloading for a backend.
 func (q dwqueue) add(ctx context.Context, u url.URL, models ...string) error {
 	tx := q.dbInstance.WithoutTransaction()
 	for _, model := range models {
@@ -37,6 +47,9 @@ func (q dwqueue) add(ctx context.Context, u url.URL, models ...string) error {
 	return nil
 }
 
+// pop retrieves and removes the next pending 'model_download' task from the persistent queue.
+// It returns the details of the task (URL and Model name) within a QueueItem.
+// If no 'model_download' tasks are currently pending in the queue, it returns libdb.ErrNotFound.
 func (q dwqueue) pop(ctx context.Context) (*store.QueueItem, error) {
 	tx := q.dbInstance.WithoutTransaction()
 
@@ -53,6 +66,9 @@ func (q dwqueue) pop(ctx context.Context) (*store.QueueItem, error) {
 	return &item, nil
 }
 
+// downloadModel executes the actual model download process for a given task item.
+// It uses the Ollama API client to pull the specified model from the backend URL defined in the item.
+// The progress function is called periodically during the download with status updates.
 func (q dwqueue) downloadModel(ctx context.Context, item store.QueueItem, progress func(status store.Status) error) error {
 	u, err := url.Parse(item.URL)
 	if err != nil {

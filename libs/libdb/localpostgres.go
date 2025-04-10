@@ -11,7 +11,6 @@ import (
 )
 
 func SetupLocalInstance(ctx context.Context, dbName, dbUser, dbPassword string) (string, *postgres.PostgresContainer, func(), error) {
-	ctx = context.Background()
 	cleanup := func() {}
 	container, err := postgres.Run(ctx,
 		"postgres:17-bookworm",

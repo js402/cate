@@ -14,6 +14,7 @@ func AddAccessRoutes(mux *http.ServeMux, _ *serverops.Config, accessService *acc
 
 	mux.HandleFunc("POST /access-control", a.create)
 	mux.HandleFunc("GET /access-control", a.list)
+	mux.HandleFunc("GET /permissions", a.permissions)
 	mux.HandleFunc("GET /access-control/{id}", a.getByID)
 	mux.HandleFunc("PUT /access-control/{id}", a.update)
 	mux.HandleFunc("DELETE /access-control/{id}", a.delete)
@@ -26,18 +27,19 @@ type accessManager struct {
 func (a *accessManager) create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	entry, err := serverops.Decode[store.AccessEntry](r)
+	entry, err := serverops.Decode[accessservice.AccessEntryRequest](r)
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.CreateOperation)
 		return
 	}
 
-	if err := a.service.Create(ctx, &entry); err != nil {
+	resp, err := a.service.Create(ctx, &entry)
+	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.CreateOperation)
 		return
 	}
 
-	_ = serverops.Encode(w, r, http.StatusCreated, entry)
+	_ = serverops.Encode(w, r, http.StatusCreated, resp)
 }
 
 func (a *accessManager) list(w http.ResponseWriter, r *http.Request) {
@@ -53,13 +55,17 @@ func (a *accessManager) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	identity := r.URL.Query().Get("identity")
-
-	var entries []*store.AccessEntry
+	withUserDetails := false
+	expand := r.URL.Query().Get("expand")
+	if expand == "user" {
+		withUserDetails = true
+	}
+	var entries []accessservice.AccessEntryRequest
 
 	if identity != "" {
-		entries, err = a.service.ListByIdentity(ctx, identity)
+		entries, err = a.service.ListByIdentity(ctx, identity, withUserDetails)
 	} else {
-		entries, err = a.service.ListAll(ctx, starting)
+		entries, err = a.service.ListAll(ctx, starting, withUserDetails)
 	}
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.ListOperation)
@@ -69,6 +75,16 @@ func (a *accessManager) list(w http.ResponseWriter, r *http.Request) {
 	_ = serverops.Encode(w, r, http.StatusOK, entries)
 }
 
+func (a *accessManager) permissions(w http.ResponseWriter, r *http.Request) {
+	permissions := []string{
+		store.PermissionNone.String(),
+		store.PermissionView.String(),
+		store.PermissionEdit.String(),
+		store.PermissionManage.String(),
+	}
+	_ = serverops.Encode(w, r, http.StatusOK, permissions)
+}
+
 func (a *accessManager) getByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.PathValue("id")
@@ -76,7 +92,15 @@ func (a *accessManager) getByID(w http.ResponseWriter, r *http.Request) {
 		_ = serverops.Error(w, r, serverops.ErrBadPathValue("missing required parameters"), serverops.AuthorizeOperation)
 		return
 	}
-	entry, err := a.service.GetByID(ctx, id)
+	withUserDetails := false
+	expand := r.URL.Query().Get("expand")
+	if expand == "user" {
+		withUserDetails = true
+	}
+	entry, err := a.service.GetByID(ctx, accessservice.AccessEntryRequest{
+		ID:              id,
+		WithUserDetails: &withUserDetails,
+	})
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.GetOperation)
 		return
@@ -92,19 +116,20 @@ func (a *accessManager) update(w http.ResponseWriter, r *http.Request) {
 		_ = serverops.Error(w, r, serverops.ErrBadPathValue("missing required parameters"), serverops.AuthorizeOperation)
 		return
 	}
-	entry, err := serverops.Decode[store.AccessEntry](r)
+	entry, err := serverops.Decode[accessservice.AccessEntryRequest](r)
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.UpdateOperation)
 		return
 	}
 	entry.ID = id
 
-	if err := a.service.Update(ctx, &entry); err != nil {
+	resp, err := a.service.Update(ctx, &entry)
+	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.UpdateOperation)
 		return
 	}
 
-	_ = serverops.Encode(w, r, http.StatusOK, entry)
+	_ = serverops.Encode(w, r, http.StatusOK, resp)
 }
 
 func (a *accessManager) delete(w http.ResponseWriter, r *http.Request) {
@@ -121,25 +146,3 @@ func (a *accessManager) delete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// func (a *accessManager) checkPermission(w http.ResponseWriter, r *http.Request) {
-// 	ctx := r.Context()
-// 	query := r.URL.Query()
-
-// 	identity := query.Get("identity")
-// 	resource := query.Get("resource")
-// 	permission := query.Get("permission")
-
-// 	if identity == "" || resource == "" || permission == "" {
-// 		_ = serverops.Error(w, r, serverops.ErrBadPathValue("missing required parameters"), serverops.AuthorizeOperation)
-// 		return
-// 	}
-
-// 	allowed, err := a.service.CheckPermission(ctx, identity, resource, permission)
-// 	if err != nil {
-// 		_ = serverops.Error(w, r, err, serverops.AuthorizeOperation)
-// 		return
-// 	}
-
-// 	_ = serverops.Encode(w, r, http.StatusOK, map[string]bool{"allowed": allowed})
-// }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
 	"github.com/js402/CATE/internal/serverapi"
@@ -25,7 +27,7 @@ func initDatabase(ctx context.Context, cfg *serverops.Config) (libdb.DBManager, 
 	}
 	var dbInstance libdb.DBManager
 	err = libroutine.NewRoutine(10, time.Minute).ExecuteWithRetry(ctx, time.Second, 3, func(ctx context.Context) error {
-		dbInstance, err = libdb.NewPostgresDBManager(dbURL, store.Schema)
+		dbInstance, err = libdb.NewPostgresDBManager(ctx, dbURL, store.Schema)
 		if err != nil {
 			return err
 		}
@@ -59,6 +61,7 @@ func main() {
 		log.Fatalf("configuration did not pass validation: %v", err)
 	}
 	ctx := context.TODO()
+
 	fmt.Print("initialize the database")
 	store, err := initDatabase(ctx, config)
 	if err != nil {
@@ -78,14 +81,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("initializing OpenSearch failed: %v", err)
 	}
+
 	apiHandler, err := serverapi.New(ctx, config, store, ps, bus)
 	if err != nil {
 		log.Fatalf("initializing API handler failed: %v", err)
 	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
+	uiURL, err := url.Parse(config.UIBaseURL)
+	if err != nil {
+		log.Fatalf("failed to parse UI base URL: %v", err)
+	}
+	uiProxy := httputil.NewSingleHostReverseProxy(uiURL)
+
+	// All other routes will be handled by the UI reverse proxy
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		uiProxy.ServeHTTP(w, r)
+	})
+
 	port := config.Port
-	log.Printf("starting API server on :%s", port)
-	if err := http.ListenAndServe(config.Addr+":"+port, apiHandler); err != nil {
-		log.Fatalf("API server failed: %v", err)
+	log.Printf("starting server on :%s", port)
+	if err := http.ListenAndServe(config.Addr+":"+port, mux); err != nil {
+		log.Fatalf("server failed: %v", err)
 	}
 }
 

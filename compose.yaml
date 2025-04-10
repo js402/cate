@@ -1,0 +1,90 @@
+services:
+  backend:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      opensearch:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:17-bookworm
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U username"]
+      interval: 5s
+      timeout: 5s
+      retries:
+        10
+        # postgres-data:
+  nats:
+    image: nats:latest
+    command: "-js"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    environment:
+      - NATS_USER=natsuser
+      - NATS_PASSWORD=natspassword
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms750m -Xmx750m"
+      - "DISABLE_SECURITY_PLUGIN=true"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "OPENSEARCH_JAVA_OPTS=-Dopensearch.experimental.feature.telemetry.enabled=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "${HOST_OPENSEARCH_PORT:-9200}:9200"
+      - "${HOST_OPENSEARCH_PORT2:-9300}:9300"
+    command: ["opensearch", "-Elogger.level=${OPENSEARCH_LOG_LEVEL:-INFO}"]
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    # volumes:
+    #   - opensearch-data:/usr/share/opensearch/data
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   # volumes:
+  #   #   - ollama-data:/root/.ollama
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:11434 || exit 1"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
+# volumes:
+#   postgres-data:
+#   opensearch-data:
+#   ollama-data:

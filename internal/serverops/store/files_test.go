@@ -12,7 +12,7 @@ import (
 
 // TestCreateAndGetFile verifies that a file can be created and retrieved by its ID.
 func TestCreateAndGetFile(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Create a new file
 	file := &store.File{
@@ -42,23 +42,23 @@ func TestCreateAndGetFile(t *testing.T) {
 
 // TestGetFilesByPath verifies that files can be retrieved by path.
 func TestGetFilesByPath(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
-	path := "/common/path/file.txt"
-	files, err := s.GetFilesByPath(ctx, path)
+	path := "/common/path/"
+	files, err := s.ListFilesByPath(ctx, path)
 	require.NoError(t, err)
 	require.Len(t, files, 0)
 	// Create several files with the same path
 	file1 := &store.File{
 		ID:      uuid.NewString(),
-		Path:    path,
+		Path:    path + uuid.NewString(),
 		Type:    "text/plain",
 		Meta:    []byte(`{"description": "File 1"}`),
 		BlobsID: uuid.NewString(),
 	}
 	file2 := &store.File{
 		ID:      uuid.NewString(),
-		Path:    path,
+		Path:    path + uuid.NewString(),
 		Type:    "text/plain",
 		Meta:    []byte(`{"description": "File 2"}`),
 		BlobsID: uuid.NewString(),
@@ -67,7 +67,7 @@ func TestGetFilesByPath(t *testing.T) {
 	require.NoError(t, s.CreateFile(ctx, file1))
 	require.NoError(t, s.CreateFile(ctx, file2))
 
-	files, err = s.GetFilesByPath(ctx, path)
+	files, err = s.ListFilesByPath(ctx, path)
 	require.NoError(t, err)
 	require.Len(t, files, 2)
 
@@ -80,7 +80,7 @@ func TestGetFilesByPath(t *testing.T) {
 
 // TestUpdateFile verifies that a file's fields can be updated.
 func TestUpdateFile(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Create a file to update.
 	file := &store.File{
@@ -113,7 +113,7 @@ func TestUpdateFile(t *testing.T) {
 
 // TestDeleteFile verifies that a file can be deleted.
 func TestDeleteFile(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Create a file to delete.
 	file := &store.File{
@@ -135,25 +135,25 @@ func TestDeleteFile(t *testing.T) {
 
 // TestGetFileByIDNotFound verifies that retrieving a non-existent file returns an appropriate error.
 func TestGetFileByIDNotFound(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Attempt to get a file that doesn't exist.
 	_, err := s.GetFileByID(ctx, uuid.NewString())
 	require.ErrorIs(t, err, libdb.ErrNotFound)
 }
 
-func TestListAllPaths(t *testing.T) {
-	ctx, s := SetupStore(t)
+func TestListAll(t *testing.T) {
+	ctx, s := store.SetupStore(t)
 
-	// Initially, there should be no file paths.
-	paths, err := s.ListAllPaths(ctx)
+	// Initially, there should be no file files.
+	files, err := s.ListFiles(ctx)
 	require.NoError(t, err)
-	require.Len(t, paths, 0)
+	require.Len(t, files, 0)
 
 	// Insert several files with various paths.
 	file1 := &store.File{
 		ID:      uuid.NewString(),
-		Path:    "/path/one",
+		Path:    "/path/one/1",
 		Type:    "text/plain",
 		Meta:    []byte(`{"description": "File one"}`),
 		BlobsID: uuid.NewString(),
@@ -178,17 +178,61 @@ func TestListAllPaths(t *testing.T) {
 	require.NoError(t, s.CreateFile(ctx, file2))
 	require.NoError(t, s.CreateFile(ctx, file3))
 
-	// List all distinct paths.
-	paths, err = s.ListAllPaths(ctx)
+	// List all.
+	files, err = s.ListFiles(ctx)
 	require.NoError(t, err)
 	// Expecting only two distinct paths: "/path/one" and "/path/two".
-	require.Len(t, paths, 2)
+	require.Len(t, files, 3)
 
 	// Optionally verify that the returned paths are correct.
 	distinctPaths := map[string]bool{}
-	for _, p := range paths {
+	for _, p := range files {
 		distinctPaths[p] = true
 	}
 	require.True(t, distinctPaths["/path/one"], "Expected path '/path/one' to be present")
 	require.True(t, distinctPaths["/path/two"], "Expected path '/path/two' to be present")
+}
+func TestBulkUpdateFilePaths_Success(t *testing.T) {
+	ctx, s := store.SetupStore(t)
+
+	// Create test files
+	file1 := &store.File{
+		ID:      uuid.NewString(),
+		Path:    "/bulk/old1",
+		Type:    "text/plain",
+		Meta:    []byte(`{"desc": "1"}`),
+		BlobsID: uuid.NewString(),
+	}
+	file2 := &store.File{
+		ID:      uuid.NewString(),
+		Path:    "/bulk/old2",
+		Type:    "text/plain",
+		Meta:    []byte(`{"desc": "2"}`),
+		BlobsID: uuid.NewString(),
+	}
+	require.NoError(t, s.CreateFile(ctx, file1))
+	require.NoError(t, s.CreateFile(ctx, file2))
+
+	originalUpdatedAt1 := file1.UpdatedAt
+	originalUpdatedAt2 := file2.UpdatedAt
+
+	// Prepare update
+	updates := map[string]string{
+		file1.ID: "/bulk/new1",
+		file2.ID: "/bulk/new2",
+	}
+
+	time.Sleep(1 * time.Second) // ensure UpdatedAt changes
+	require.NoError(t, s.BulkUpdateFilePaths(ctx, updates))
+
+	// Verify updates
+	updated1, err := s.GetFileByID(ctx, file1.ID)
+	require.NoError(t, err)
+	require.Equal(t, "/bulk/new1", updated1.Path)
+	require.True(t, updated1.UpdatedAt.After(originalUpdatedAt1))
+
+	updated2, err := s.GetFileByID(ctx, file2.ID)
+	require.NoError(t, err)
+	require.Equal(t, "/bulk/new2", updated2.Path)
+	require.True(t, updated2.UpdatedAt.After(originalUpdatedAt2))
 }

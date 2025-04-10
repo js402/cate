@@ -109,6 +109,18 @@ func (s *store) DeleteAccessEntriesByIdentity(ctx context.Context, identity stri
 	return checkRowsAffected(result)
 }
 
+func (s *store) DeleteAccessEntriesByResource(ctx context.Context, resource string) error {
+	result, err := s.Exec.ExecContext(ctx, `
+		DELETE FROM accesslists
+		WHERE resource = $1`,
+		resource,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to delete access entry: %w", err)
+	}
+	return checkRowsAffected(result)
+}
+
 // ListAccessEntries returns all access control entries ordered by creation time
 func (s *store) ListAccessEntries(ctx context.Context, createdAtCursor time.Time) ([]*AccessEntry, error) {
 	rows, err := s.Exec.QueryContext(ctx, `

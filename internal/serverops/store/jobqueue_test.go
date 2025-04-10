@@ -11,7 +11,7 @@ import (
 )
 
 func TestAppendJobAndPopAll(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	job := &store.Job{
 		ID:           uuid.New().String(),
@@ -38,7 +38,7 @@ func TestAppendJobAndPopAll(t *testing.T) {
 }
 
 func TestPopAllForType(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	job1 := &store.Job{
 		ID:           uuid.New().String(),
@@ -77,7 +77,7 @@ func TestPopAllForType(t *testing.T) {
 }
 
 func TestPopAllEmptyQueue(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	jobs, err := s.PopAllJobs(ctx)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestPopAllEmptyQueue(t *testing.T) {
 }
 
 func TestPopAllForTypeEmpty(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	jobs, err := s.PopJobsForType(ctx, "non-existent-type")
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestPopAllForTypeEmpty(t *testing.T) {
 }
 
 func TestPopOneForType(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Prepare valid JSON payloads.
 	job1Payload, _ := json.Marshal(map[string]string{"data": "job1"})
@@ -163,7 +163,7 @@ func TestPopOneForType(t *testing.T) {
 }
 
 func TestGetAllForType(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Prepare valid JSON payloads.
 	payloadA1, err := json.Marshal(map[string]string{"job": "A1"})

@@ -4,62 +4,60 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/js402/CATE/internal/llmresolver"
+	"github.com/js402/CATE/internal/modelprovider"
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/serverops/messagerepo"
-	"github.com/js402/CATE/internal/serverops/state"
 	"github.com/js402/CATE/internal/serverops/store"
+	"github.com/js402/CATE/libs/libollama"
 	"github.com/ollama/ollama/api"
 )
 
 type Service struct {
-	state    *state.State
-	msgStore messagerepo.Store
+	state     *runtimestate.State
+	msgRepo   messagerepo.Store
+	tokenizer libollama.Tokenizer
 }
 
-func New(state *state.State, msgStore messagerepo.Store) *Service {
-	return &Service{state: state,
-		msgStore: msgStore,
+func New(state *runtimestate.State, msgStore messagerepo.Store, tokenizer libollama.Tokenizer) *Service {
+	return &Service{
+		state:     state,
+		msgRepo:   msgStore,
+		tokenizer: tokenizer,
 	}
 }
 
 type ChatInstance struct {
-	Model    string
-	Messages []api.Message
+	Messages []serverops.Message
 
 	CreatedAt time.Time
-	mu        sync.Mutex
 }
 
 type ChatSession struct {
 	ChatID      string       `json:"id"`
 	StartedAt   time.Time    `json:"startedAt"`
-	Model       string       `json:"model"`
 	BackendID   string       `json:"backendId"`
 	LastMessage *ChatMessage `json:"lastMessage,omitempty"`
 }
 
 // NewInstance creates a new chat instance after verifying that the user is authorized to start a chat for the given model.
-func (s *Service) NewInstance(ctx context.Context, subject, selectedModel string) (uuid.UUID, error) {
+func (s *Service) NewInstance(ctx context.Context, subject string, preferredModels ...string) (uuid.UUID, error) {
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return uuid.Nil, err
 	}
 
-	_, err := state.FindModel(ctx, s.state, selectedModel)
-	if err != nil {
-		return uuid.Nil, err
-	}
+	// TODO: check if at least one of preferred models are ready for usage.
+	// OR we find best candidates instead
 
 	chatSubjectID := uuid.New()
 	now := time.Now().UTC()
 
-	err = s.msgStore.Save(ctx, messagerepo.Message{
+	err := s.msgRepo.Save(ctx, messagerepo.Message{
 		ID:          uuid.New().String(),
 		MessageID:   "0",
 		Data:        `{"role": "system", "content": "{}"}`,
@@ -81,7 +79,7 @@ func (s *Service) AddInstruction(ctx context.Context, id uuid.UUID, message stri
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return err
 	}
-	err := s.msgStore.Save(ctx, messagerepo.Message{
+	err := s.msgRepo.Save(ctx, messagerepo.Message{
 		ID:          uuid.New().String(),
 		MessageID:   "0",
 		Data:        fmt.Sprintf(`{"role": "system", "content": "%s"}`, message),
@@ -98,7 +96,7 @@ func (s *Service) AddMessage(ctx context.Context, id uuid.UUID, message string) 
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return err
 	}
-	err := s.msgStore.Save(ctx, messagerepo.Message{
+	err := s.msgRepo.Save(ctx, messagerepo.Message{
 		ID:          uuid.New().String(),
 		MessageID:   "0",
 		Data:        fmt.Sprintf(`{"role": "user", "content": "%s"}`, message),
@@ -111,67 +109,55 @@ func (s *Service) AddMessage(ctx context.Context, id uuid.UUID, message string) 
 	return err
 }
 
-func (s *Service) Chat(ctx context.Context, subjectID uuid.UUID, model, message string) (string, error) {
+func (s *Service) Chat(ctx context.Context, subjectID uuid.UUID, message string, preferredModelNames ...string) (string, error) {
 	// Save the user's message.
 	if err := s.AddMessage(ctx, subjectID, message); err != nil {
 		return "", err
 	}
 
-	backendInstance, err := state.FindModel(ctx, s.state, model)
-	if err != nil {
-		return "", err
-	}
-
-	u, err := url.Parse(backendInstance.Backend.BaseURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid backend URL: %v", err)
-	}
-
 	// Retrieve all messages for this chat from the persistent store.
-	msgs, _, _, err := s.msgStore.Search(ctx, subjectID.String(), nil, nil, "", "", 0, 10000, "", "")
+	msgs, _, _, err := s.msgRepo.Search(ctx, subjectID.String(), nil, nil, "", "", 0, 10000, "", "")
 	if err != nil {
 		return "", err
 	}
 
 	// Convert stored messages into the api.Message slice.
-	var apiMessages []api.Message
+	var messages []serverops.Message
 	for _, msg := range msgs {
-		var parsedMsg api.Message
+		var parsedMsg serverops.Message
 		if err := json.Unmarshal([]byte(msg.Data), &parsedMsg); err != nil {
-			// Optionally log or skip malformed messages.
+			fmt.Printf("BUG: TODO: json.Unmarshal([]byte(msg.Data): now what? %v", err)
 			continue
 		}
-		apiMessages = append(apiMessages, parsedMsg)
+		messages = append(messages, parsedMsg)
 	}
 
-	client := api.NewClient(u, http.DefaultClient)
-	var finalMessage api.Message
-	stream := false
-
-	// Perform the chat request with the full conversation.
-	err = client.Chat(ctx, &api.ChatRequest{
-		Model:    model,
-		Messages: apiMessages,
-		Stream:   &stream,
-	}, func(cr api.ChatResponse) error {
-		if cr.Done {
-			finalMessage = cr.Message
-		}
-		return nil
-	})
+	convertedMessage := make([]api.Message, len(messages))
+	for _, m := range messages {
+		convertedMessage = append(convertedMessage, api.Message{
+			Role:    m.Role,
+			Content: m.Content,
+		})
+	}
+	contextLength, err := s.CalculateContextSize(messages)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("could not estimate context size %w", err)
 	}
-
-	// Save the assistant's reply into the persistent store.
-	assistantData, err := json.Marshal(finalMessage)
+	chatClient, err := llmresolver.ResolveChat(ctx, llmresolver.ResolveRequest{
+		ContextLength: contextLength,
+		ModelNames:    preferredModelNames,
+	}, modelprovider.ModelProviderAdapter(ctx, s.state.Get(ctx)))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to resolve backend %w", err)
 	}
-	err = s.msgStore.Save(ctx, messagerepo.Message{
+	responseMessage, err := chatClient.Chat(ctx, messages)
+	if err != nil {
+		return "", fmt.Errorf("failed to chat %w", err)
+	}
+	err = s.msgRepo.Save(ctx, messagerepo.Message{
 		ID:          uuid.New().String(),
 		MessageID:   "0",
-		Data:        string(assistantData),
+		Data:        fmt.Sprintf(`{"role": "%s", "content": "%s"}`, responseMessage.Role, responseMessage.Content),
 		Source:      "chatservice",
 		SpecVersion: "v1",
 		Type:        "chat_message",
@@ -182,7 +168,7 @@ func (s *Service) Chat(ctx context.Context, subjectID uuid.UUID, model, message 
 		return "", err
 	}
 
-	return finalMessage.Content, nil
+	return responseMessage.Content, nil
 }
 
 // ChatMessage is the public representation of a message in a chat.
@@ -201,7 +187,7 @@ func (s *Service) GetChatHistory(ctx context.Context, id uuid.UUID) ([]ChatMessa
 		return nil, err
 	}
 
-	msgs, _, _, err := s.msgStore.Search(ctx, id.String(), nil, nil, "", "", 0, 10000, "", "")
+	msgs, _, _, err := s.msgRepo.Search(ctx, id.String(), nil, nil, "", "", 0, 10000, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +219,7 @@ func (s *Service) ListChats(ctx context.Context) ([]ChatSession, error) {
 	}
 
 	// Retrieve messages related to chat sessions.
-	msgs, _, _, err := s.msgStore.Search(ctx, "", nil, nil, "chatservice", "chat_message", 0, 10000, "", "")
+	msgs, _, _, err := s.msgRepo.Search(ctx, "", nil, nil, "chatservice", "chat_message", 0, 10000, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +237,6 @@ func (s *Service) ListChats(ctx context.Context) ([]ChatSession, error) {
 			return messages[i].Time.Before(messages[j].Time)
 		})
 		// TODO Retrieve a model value.
-		model := "TODO "
 		var lastMsg *ChatMessage
 		if len(messages) > 0 {
 			last := messages[len(messages)-1]
@@ -270,12 +255,46 @@ func (s *Service) ListChats(ctx context.Context) ([]ChatSession, error) {
 		sessions = append(sessions, ChatSession{
 			ChatID:      subject,
 			StartedAt:   messages[0].Time,
-			Model:       model,
 			LastMessage: lastMsg,
 		})
 	}
 
 	return sessions, nil
+}
+
+type ModelResult struct {
+	Model      string
+	TokenCount int
+	MaxTokens  int // Max token length for the model.
+}
+
+func (s *Service) CalculateContextSize(messages []serverops.Message, baseModels ...string) (int, error) {
+	var prompt string
+	for _, m := range messages {
+		if m.Role == "user" {
+			prompt = prompt + "\n" + m.Content
+		}
+	}
+	var selectedModel string
+	for _, model := range baseModels {
+		optimal, err := s.tokenizer.OptimalTokenizerModel(model)
+		if err != nil {
+			return 0, fmt.Errorf("BUG: failed to get optimal model for %q: %w", model, err)
+		}
+		// TODO: For now, pick the first valid one.
+		selectedModel = optimal
+		break
+	}
+	// If no base models were provided, use a fallback.
+	if selectedModel == "" {
+		selectedModel = "tiny"
+	}
+
+	count, err := s.tokenizer.CountTokens(selectedModel, prompt)
+	if err != nil {
+		return 0, fmt.Errorf("failed to estimate context size %w", err)
+	}
+	return count, nil
 }
 
 func (s *Service) GetServiceName() string {

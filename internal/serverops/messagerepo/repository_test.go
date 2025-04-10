@@ -11,6 +11,7 @@ import (
 )
 
 func TestCRUD(t *testing.T) {
+	// Initialize a new test repository backed by an OpenSearch test container.
 	repo, cleanup, err := messagerepo.NewTestStore(t)
 	require.NoError(t, err, "failed to initialize test repository")
 	defer cleanup()

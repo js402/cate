@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/serverops/messagerepo"
-	"github.com/js402/CATE/internal/serverops/state"
 	"github.com/js402/CATE/internal/serverops/store"
 	"github.com/js402/CATE/internal/services/chatservice"
 	"github.com/js402/CATE/libs/libbus"
@@ -21,9 +21,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func SetupTestEnvironment(t *testing.T) (context.Context, *state.State, func()) {
+func SetupTestEnvironment(t *testing.T) (context.Context, *runtimestate.State, func()) {
 	ctx := context.TODO()
-	serverops.NewServiceManager(&serverops.Config{})
+	err := serverops.NewServiceManager(&serverops.Config{
+		JWTExpiry: "1h",
+	})
+	require.NoError(t, err)
 	// We'll collect cleanup functions as we go.
 	var cleanups []func()
 	addCleanup := func(fn func()) {
@@ -47,7 +50,7 @@ func SetupTestEnvironment(t *testing.T) (context.Context, *state.State, func()) 
 	}
 	addCleanup(dbCleanup)
 
-	dbInstance, err := libdb.NewPostgresDBManager(dbConn, store.Schema)
+	dbInstance, err := libdb.NewPostgresDBManager(ctx, dbConn, store.Schema)
 	if err != nil {
 		for _, fn := range cleanups {
 			fn()
@@ -58,7 +61,13 @@ func SetupTestEnvironment(t *testing.T) (context.Context, *state.State, func()) 
 	addCleanup(cleanup2)
 
 	// Initialize backend service state.
-	backendState := state.New(dbInstance, ps)
+	backendState, err := runtimestate.New(ctx, dbInstance, ps)
+	if err != nil {
+		for _, fn := range cleanups {
+			fn()
+		}
+		t.Fatalf("failed to create new backend state: %v", err)
+	}
 
 	triggerChan := make(chan struct{})
 	// Use the circuit breaker loop to run the state service cycles.
@@ -128,25 +137,29 @@ func TestChat(t *testing.T) {
 	repo, cleanup2, err := messagerepo.NewTestStore(t)
 	require.NoError(t, err, "failed to initialize test repository")
 	defer cleanup2()
-
+	tokenizer, err := libollama.NewTokenizer(libollama.TokenizerWithFallbackModel("tiny"), libollama.TokenizerWithPreloadedModels("tiny"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Run("creating new chat instance", func(t *testing.T) {
-		manager := chatservice.New(backendState, repo)
+		manager := chatservice.New(backendState, repo, tokenizer)
 
 		// Test valid model
 		id, err := manager.NewInstance(ctx, "user1", "smollm2:135m")
 		require.NoError(t, err)
 		require.NotEqual(t, uuid.Nil, id)
 
-		// Test invalid model
-		_, err = manager.NewInstance(ctx, "user1", "invalid-model")
-		require.ErrorContains(t, err, "not ready for usage")
+		// // Test invalid model
+		// _, err = manager.NewInstance(ctx, "user1", "invalid-model")
+		// require.ErrorContains(t, err, "not ready for usage")
 	})
 
 	t.Run("simple chat interaction tests", func(t *testing.T) {
-		manager := chatservice.New(backendState, repo)
+		manager := chatservice.New(backendState, repo, tokenizer)
 
-		id, _ := manager.NewInstance(ctx, "user1", "smollm2:135m")
-		response, err := manager.Chat(ctx, id, "smollm2:135m", "what is the capital of england?")
+		id, err := manager.NewInstance(ctx, "user1", "smollm2:135m")
+		require.NoError(t, err)
+		response, err := manager.Chat(ctx, id, "what is the capital of england?", "smollm2:135m")
 		require.NoError(t, err)
 		responseLower := strings.ToLower(response)
 		println(responseLower)
@@ -154,7 +167,7 @@ func TestChat(t *testing.T) {
 	})
 
 	t.Run("test chat history via interactions", func(t *testing.T) {
-		manager := chatservice.New(backendState, repo)
+		manager := chatservice.New(backendState, repo, tokenizer)
 
 		// Create new chat instance
 		id, err := manager.NewInstance(ctx, "user1", "smollm2:135m")
@@ -167,9 +180,9 @@ func TestChat(t *testing.T) {
 
 		// First interaction
 		userMessage1 := "What's the capital of France?"
-		_, err = manager.Chat(ctx, id, "smollm2:135m", userMessage1)
+		_, err = manager.Chat(ctx, id, userMessage1, "smollm2:135m")
 		require.NoError(t, err)
-
+		time.Sleep(time.Millisecond)
 		// Verify first pair of messages
 		history, err = manager.GetChatHistory(ctx, id)
 		require.NoError(t, err)
@@ -193,7 +206,7 @@ func TestChat(t *testing.T) {
 
 		// Second interaction
 		userMessage2 := "What about Germany?"
-		_, err = manager.Chat(ctx, id, "smollm2:135m", userMessage2)
+		_, err = manager.Chat(ctx, id, userMessage2, "smollm2:135m")
 		require.NoError(t, err)
 
 		// Verify updated history

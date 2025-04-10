@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/serverops/store"
@@ -27,12 +28,43 @@ func New(dbInstance libdb.DBManager, psInstance libbus.Messenger) *Service {
 	}
 }
 
-func (s *Service) CurrentQueueState(ctx context.Context) ([]*store.Job, error) {
+type QueueJobs struct {
+	ID           string          `json:"id"`
+	TaskType     string          `json:"taskType"`
+	ModelJob     store.QueueItem `json:"modelJob"`
+	ScheduledFor int             `json:"scheduledFor"`
+	ValidUntil   int             `json:"validUntil"`
+	CreatedAt    time.Time       `json:"createdAt"`
+}
+
+func (s *Service) CurrentQueueState(ctx context.Context) ([]QueueJobs, error) {
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionView); err != nil {
 		return nil, err
 	}
 	tx := s.dbInstance.WithoutTransaction()
-	return store.New(tx).GetJobsForType(ctx, "model_download")
+	queue, err := store.New(tx).GetJobsForType(ctx, "model_download")
+	if err != nil {
+		return nil, err
+	}
+	var convQueue []QueueJobs
+	var item store.QueueItem
+	for _, queue := range queue {
+
+		err := json.Unmarshal(queue.Payload, &item)
+		if err != nil {
+			return nil, err
+		}
+		convQueue = append(convQueue, QueueJobs{
+			ID:           queue.ID,
+			TaskType:     queue.TaskType,
+			ModelJob:     item,
+			ScheduledFor: queue.ScheduledFor,
+			ValidUntil:   queue.ValidUntil,
+			CreatedAt:    queue.CreatedAt,
+		})
+	}
+
+	return convQueue, nil
 }
 
 func (s *Service) CancelDownloads(ctx context.Context, url string) error {
@@ -50,21 +82,32 @@ func (s *Service) RemoveFromQueue(ctx context.Context, modelName string) error {
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionView); err != nil {
 		return err
 	}
-	tx, comm, err := s.dbInstance.WithTransaction(ctx)
+	tx, comm, rTx, err := s.dbInstance.WithTransaction(ctx)
+	defer func() {
+		if err := rTx(); err != nil {
+			log.Println("failed to rollback transaction", err)
+		}
+	}()
+	if err != nil {
+		return err
+	}
 	jobs, err := store.New(tx).PopJobsForType(ctx, "model_download")
 	if err != nil {
 		return err
 	}
+	found := false
 	var filteresJobs []*store.Job
 	for _, job := range jobs {
 		var item store.QueueItem
-		// Use &item so json.Unmarshal writes into our allocated struct.
 		err = json.Unmarshal(job.Payload, &item)
 		if err != nil {
 			return err
 		}
 		if item.Model != modelName {
 			filteresJobs = append(filteresJobs, job)
+		}
+		if item.Model == modelName {
+			found = true
 		}
 	}
 	for _, job := range filteresJobs {
@@ -73,7 +116,10 @@ func (s *Service) RemoveFromQueue(ctx context.Context, modelName string) error {
 			return err
 		}
 	}
-	return comm(ctx)
+	if found {
+		return comm(ctx)
+	}
+	return nil
 }
 
 func (s *Service) InProgress(ctx context.Context, statusCh chan<- *store.Status) error {

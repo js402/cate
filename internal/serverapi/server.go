@@ -6,38 +6,56 @@ import (
 	"strings"
 	"time"
 
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverapi/backendapi"
 	"github.com/js402/CATE/internal/serverapi/chatapi"
+	"github.com/js402/CATE/internal/serverapi/poolapi"
 	"github.com/js402/CATE/internal/serverapi/systemapi"
 	"github.com/js402/CATE/internal/serverapi/usersapi"
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/serverops/messagerepo"
-	"github.com/js402/CATE/internal/serverops/state"
 	"github.com/js402/CATE/internal/services/accessservice"
 	"github.com/js402/CATE/internal/services/backendservice"
 	"github.com/js402/CATE/internal/services/chatservice"
 	"github.com/js402/CATE/internal/services/downloadservice"
 	"github.com/js402/CATE/internal/services/fileservice"
 	"github.com/js402/CATE/internal/services/modelservice"
+	"github.com/js402/CATE/internal/services/poolservice"
 	"github.com/js402/CATE/internal/services/userservice"
 	"github.com/js402/CATE/libs/libauth"
 	"github.com/js402/CATE/libs/libbus"
 	"github.com/js402/CATE/libs/libdb"
+	"github.com/js402/CATE/libs/libollama"
 	"github.com/js402/CATE/libs/libroutine"
 )
 
-func New(ctx context.Context, config *serverops.Config, dbInstance libdb.DBManager, pubsub libbus.Messenger, bus messagerepo.Store) (http.Handler, error) {
-	_ = bus
+func New(
+	ctx context.Context,
+	config *serverops.Config,
+	dbInstance libdb.DBManager,
+	pubsub libbus.Messenger,
+	bus messagerepo.Store,
+) (http.Handler, error) {
 	mux := http.NewServeMux()
 	var handler http.Handler = mux
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		return // OK
+		w.WriteHeader(http.StatusNotFound)
 	})
-	serverops.NewServiceManager(config)
-	state := state.New(dbInstance, pubsub)
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		// OK
+	})
+	err := serverops.NewServiceManager(config)
+	if err != nil {
+		return nil, err
+	}
+	state, err := runtimestate.New(ctx, dbInstance, pubsub)
+	if err != nil {
+		return nil, err
+	}
 	backendService := backendservice.New(dbInstance)
 	backendapi.AddBackendRoutes(mux, config, backendService, state)
-
+	poolservice := poolservice.New(dbInstance)
+	poolapi.AddPoolRoutes(mux, config, poolservice)
 	// Get circuit breaker pool instance
 	pool := libroutine.GetPool()
 
@@ -64,8 +82,9 @@ func New(ctx context.Context, config *serverops.Config, dbInstance libdb.DBManag
 	downloadService := downloadservice.New(dbInstance, pubsub)
 	backendapi.AddQueueRoutes(mux, config, downloadService)
 	modelService := modelservice.New(dbInstance)
-	backendapi.AddModelRoutes(mux, config, modelService)
-	chatService := chatservice.New(state, bus)
+	backendapi.AddModelRoutes(mux, config, modelService, downloadService)
+	tokenizer, err := libollama.NewTokenizer(libollama.TokenizerWithFallbackModel("tiny"), libollama.TokenizerWithPreloadedModels("tiny"))
+	chatService := chatservice.New(state, bus, tokenizer)
 	chatapi.AddChatRoutes(mux, config, chatService, state)
 	userService := userservice.New(dbInstance, config)
 	usersapi.AddUserRoutes(mux, config, userService)
@@ -76,8 +95,9 @@ func New(ctx context.Context, config *serverops.Config, dbInstance libdb.DBManag
 	usersapi.AddAuthRoutes(mux, userService)
 
 	handler = enableCORS(config, handler)
-	handler = jwtMiddleware(config, handler)
 	handler = jwtRefreshMiddleware(config, handler)
+	handler = authSourceNormalizerMiddleware(handler)
+	handler = jwtMiddleware(config, handler)
 	services := []serverops.ServiceMeta{
 		modelService,
 		backendService,
@@ -87,7 +107,7 @@ func New(ctx context.Context, config *serverops.Config, dbInstance libdb.DBManag
 		downloadService,
 		fileService,
 	}
-	err := serverops.GetManagerInstance().RegisterServices(services...)
+	err = serverops.GetManagerInstance().RegisterServices(services...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,11 +169,29 @@ func enableCORS(cfg *serverops.Config, next http.Handler) http.Handler {
 	})
 }
 
+func authSourceNormalizerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		hasBearerToken := authHeader != "" && strings.HasPrefix(strings.ToLower(authHeader), "bearer ") && len(strings.Fields(authHeader)) > 1
+		ctx := r.Context()
+		if !hasBearerToken {
+			cookie, err := r.Cookie("auth_token")
+			if err == nil && cookie != nil && cookie.Value != "" {
+				ctx = context.WithValue(r.Context(), libauth.ContextTokenKey, cookie.Value)
+			}
+
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func jwtMiddleware(_ *serverops.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tokenString := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		ctx := context.WithValue(r.Context(), libauth.ContextTokenKey, tokenString)
-
+		ctx := r.Context()
+		if len(r.Header.Get("Authorization")) > 0 {
+			tokenString := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			ctx = context.WithValue(r.Context(), libauth.ContextTokenKey, tokenString)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -165,6 +203,7 @@ func jwtRefreshMiddleware(_ *serverops.Config, next http.Handler) http.Handler {
 			// Try to refresh the token (RefreshToken returns the new token, a bool if it was replaced, and error)
 			newToken, replaced, expiresAt, err := serverops.RefreshToken(r.Context())
 			if err != nil {
+				// now we silently ignore and continue with the old token.
 			} else if replaced {
 				// Create a new cookie with the updated token
 				cookie := &http.Cookie{
@@ -172,6 +211,7 @@ func jwtRefreshMiddleware(_ *serverops.Config, next http.Handler) http.Handler {
 					Value:    newToken,
 					Path:     "/",
 					Expires:  expiresAt.UTC(),
+					SameSite: http.SameSiteStrictMode,
 					HttpOnly: true,
 					Secure:   false,
 				}

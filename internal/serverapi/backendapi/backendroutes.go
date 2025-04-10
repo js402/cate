@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/js402/CATE/internal/runtimestate"
 	"github.com/js402/CATE/internal/serverops"
-	"github.com/js402/CATE/internal/serverops/state"
 	"github.com/js402/CATE/internal/serverops/store"
 	"github.com/js402/CATE/internal/services/backendservice"
 	"github.com/ollama/ollama/api"
 )
 
-func AddBackendRoutes(mux *http.ServeMux, _ *serverops.Config, backendService *backendservice.Service, stateService *state.State) {
+func AddBackendRoutes(mux *http.ServeMux, _ *serverops.Config, backendService *backendservice.Service, stateService *runtimestate.State) {
 	b := &backendManager{service: backendService, stateService: stateService}
 
 	mux.HandleFunc("POST /backends", b.create)
@@ -38,7 +38,7 @@ type respBackendList struct {
 
 type backendManager struct {
 	service      *backendservice.Service
-	stateService *state.State
+	stateService *runtimestate.State
 }
 
 func (b *backendManager) create(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func verifyUserEquality(t *testing.T, expected, actual *store.User) {
 
 // TestCreateUserAndRetrieve creates a user and then retrieves it via ID, Email, and Subject.
 func TestCreateUserAndRetrieve(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	user := &store.User{
 		ID:               uuid.NewString(),
@@ -62,7 +63,7 @@ func TestCreateUserAndRetrieve(t *testing.T) {
 
 // TestCreateUserDuplicateEmail ensures that trying to create a user with a duplicate email fails.
 func TestCreateUserDuplicateEmail(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	user1 := &store.User{
 		ID:      uuid.NewString(),
@@ -87,7 +88,7 @@ func TestCreateUserDuplicateEmail(t *testing.T) {
 
 // TestCreateUserDuplicateSubject ensures that trying to create a user with a duplicate subject fails.
 func TestCreateUserDuplicateSubject(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	user1 := &store.User{
 		ID:      uuid.NewString(),
@@ -110,7 +111,7 @@ func TestCreateUserDuplicateSubject(t *testing.T) {
 
 // TestGetUserNotFound attempts to retrieve non-existent users.
 func TestGetUserNotFound(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	_, err := s.GetUserByID(ctx, uuid.NewString())
 	require.ErrorIs(t, err, libdb.ErrNotFound)
@@ -124,7 +125,7 @@ func TestGetUserNotFound(t *testing.T) {
 
 // TestUpdateUser updates an existing user and verifies the changes.
 func TestUpdateUser(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	original := &store.User{
 		ID:      uuid.NewString(),
@@ -157,7 +158,7 @@ func TestUpdateUser(t *testing.T) {
 
 // TestUpdateUserConflict tests that updates conflicting with existing unique constraints are rejected.
 func TestUpdateUserConflict(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	user1 := &store.User{
 		ID:      uuid.NewString(),
@@ -188,7 +189,7 @@ func TestUpdateUserConflict(t *testing.T) {
 
 // TestDeleteUser deletes a user and then confirms that retrieval fails.
 func TestDeleteUser(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	user := &store.User{
 		ID:      uuid.NewString(),
@@ -208,14 +209,14 @@ func TestDeleteUser(t *testing.T) {
 
 // TestDeleteUserNotFound ensures that trying to delete a non-existent user returns ErrNotFound.
 func TestDeleteUserNotFound(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 	err := s.DeleteUser(ctx, uuid.NewString())
 	require.ErrorIs(t, err, libdb.ErrNotFound)
 }
 
 // TestListUsersOrder creates multiple users and checks that ListUsers returns them in descending creation order.
 func TestListUsersOrder(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 	beforeCreation := time.Now().UTC()
 
 	// Create several users with a slight delay between each.
@@ -241,4 +242,83 @@ func TestListUsersOrder(t *testing.T) {
 	retrieved, err = s.ListUsers(ctx, beforeCreation)
 	require.NoError(t, err)
 	require.Len(t, retrieved, 0)
+}
+
+func createTestUser(t *testing.T, ctx context.Context, s store.Store, subject, friendlyName string) *store.User {
+	t.Helper()
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        uuid.NewString() + "@test.com", // Ensure unique email
+		Subject:      subject,
+		FriendlyName: friendlyName,
+		Salt:         uuid.NewString(),
+	}
+	err := s.CreateUser(ctx, user)
+	require.NoError(t, err)
+	createdUser, err := s.GetUserByID(ctx, user.ID)
+	require.NoError(t, err)
+	return createdUser
+}
+
+func TestListUsersBySubjects(t *testing.T) {
+	ctx, s := store.SetupStore(t)
+
+	// --- Setup: Create test users ---
+	userA := createTestUser(t, ctx, s, "subj-a", "User A") // Oldest
+	userB := createTestUser(t, ctx, s, "subj-b", "User B")
+	userD := createTestUser(t, ctx, s, "subj-d", "User D") // Newest
+
+	// --- Test Cases ---
+
+	t.Run("Fetch specific existing subjects", func(t *testing.T) {
+		subjectsToFetch := []string{"subj-b", "subj-d"}
+		retrieved, err := s.ListUsersBySubjects(ctx, subjectsToFetch...)
+
+		require.NoError(t, err)
+		require.Len(t, retrieved, 2)
+
+		// Results should be ordered by CreatedAt DESC (D then B)
+		// Check IDs to confirm correct users and order
+		require.Equal(t, userD.ID, retrieved[0].ID, "First item should be user D")
+		require.Equal(t, userB.ID, retrieved[1].ID, "Second item should be user B")
+	})
+
+	t.Run("Fetch subject with multiple users", func(t *testing.T) {
+		subjectsToFetch := []string{"subj-a"}
+		retrieved, err := s.ListUsersBySubjects(ctx, subjectsToFetch...)
+
+		require.NoError(t, err)
+		require.Len(t, retrieved, 1)
+
+		// Results should be ordered by CreatedAt DESC (C then A)
+		require.Equal(t, userA.ID, retrieved[0].ID, "First item should be user A")
+	})
+
+	t.Run("Fetch mixture of subjects", func(t *testing.T) {
+		subjectsToFetch := []string{"subj-a", "subj-d"} // A, C, D match
+		retrieved, err := s.ListUsersBySubjects(ctx, subjectsToFetch...)
+
+		require.NoError(t, err)
+		require.Len(t, retrieved, 2)
+
+		// Results ordered by CreatedAt DESC: D, C, A
+		require.Equal(t, userD.ID, retrieved[0].ID, "First item should be user D")
+		require.Equal(t, userA.ID, retrieved[1].ID, "Second item should be user A")
+	})
+
+	t.Run("Fetch non-existent subject", func(t *testing.T) {
+		subjectsToFetch := []string{"non-existent"}
+		retrieved, err := s.ListUsersBySubjects(ctx, subjectsToFetch...)
+
+		require.NoError(t, err)
+		require.Empty(t, retrieved, "Result should be empty for non-existent subject")
+	})
+
+	t.Run("Fetch with empty subject list", func(t *testing.T) {
+		// subjects... parameter becomes an empty slice if no args passed
+		retrieved, err := s.ListUsersBySubjects(ctx)
+
+		require.NoError(t, err)
+		require.Empty(t, retrieved, "Result should be empty when no subjects are passed")
+	})
 }

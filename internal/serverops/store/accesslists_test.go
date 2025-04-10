@@ -11,14 +11,21 @@ import (
 )
 
 func TestCreateAndGetAccessEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create new entry
 	entry := &store.AccessEntry{
 		ID:         uuid.NewString(),
 		Identity:   "user|123",
 		Resource:   "project:456",
-		Permission: 2,
+		Permission: store.PermissionManage,
 	}
 	err := s.CreateAccessEntry(ctx, entry)
 	require.NoError(t, err)
@@ -38,19 +45,28 @@ func TestCreateAndGetAccessEntry(t *testing.T) {
 }
 
 func TestUpdateAccessEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create initial entry
 	entry := &store.AccessEntry{
 		ID:         uuid.NewString(),
 		Identity:   "user|123",
 		Resource:   "project:456",
-		Permission: 1,
+		Permission: store.PermissionEdit,
 	}
 	require.NoError(t, s.CreateAccessEntry(ctx, entry))
 
 	// Update entry
-	entry.Permission = 2
+	entry.Permission = store.PermissionManage
 	entry.Resource = "project:789"
 	require.NoError(t, s.UpdateAccessEntry(ctx, entry))
 
@@ -63,7 +79,16 @@ func TestUpdateAccessEntry(t *testing.T) {
 }
 
 func TestDeleteAccessEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create entry
 	entry := &store.AccessEntry{
@@ -84,7 +109,16 @@ func TestDeleteAccessEntry(t *testing.T) {
 }
 
 func TestDeleteAccessEntriesByIdentity(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create entry
 	entry := &store.AccessEntry{
@@ -114,9 +148,61 @@ func TestDeleteAccessEntriesByIdentity(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDeleteAccessEntriesByResource(t *testing.T) {
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	// Create entry
+	entry := &store.AccessEntry{
+		ID:         uuid.NewString(),
+		Identity:   "user|123",
+		Resource:   "project:456",
+		Permission: 1,
+	}
+	require.NoError(t, s.CreateAccessEntry(ctx, entry))
+	// Create entry
+	entry = &store.AccessEntry{
+		ID:         uuid.NewString(),
+		Identity:   "user|123",
+		Resource:   "project:457",
+		Permission: 1,
+	}
+	require.NoError(t, s.CreateAccessEntry(ctx, entry))
+	// Delete entry
+	err := s.DeleteAccessEntriesByResource(ctx, "project:456")
+	require.NoError(t, err)
+
+	// Verify deletion
+	ae, err := s.GetAccessEntriesByIdentity(ctx, "user|123")
+	require.Len(t, ae, 1)
+	require.NoError(t, err)
+}
+
 func TestGetAllAccessEntriesOrder(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 	beforeCreated := time.Now().UTC()
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|1",
+		FriendlyName: "Test User",
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
+	user = &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example2.com",
+		Subject:      "user|2",
+		FriendlyName: "Test User",
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create two entries with delay
 	entry1 := &store.AccessEntry{ID: uuid.NewString(), Identity: "user|1", Resource: "res1", Permission: 1}
@@ -139,7 +225,25 @@ func TestGetAllAccessEntriesOrder(t *testing.T) {
 }
 
 func TestGetAccessEntriesByIdentity(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
+	user = &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example2.com",
+		Subject:      "user|456",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 
 	// Create test entries
 	entries := []*store.AccessEntry{
@@ -159,7 +263,7 @@ func TestGetAccessEntriesByIdentity(t *testing.T) {
 }
 
 func TestUpdateNonExistentEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	entry := &store.AccessEntry{
 		ID: uuid.NewString(),
@@ -169,15 +273,23 @@ func TestUpdateNonExistentEntry(t *testing.T) {
 }
 
 func TestDeleteNonExistentEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	err := s.DeleteAccessEntry(ctx, uuid.NewString())
 	require.ErrorIs(t, err, libdb.ErrNotFound)
 }
 
 func TestCreateDuplicateEntry(t *testing.T) {
-	ctx, s := SetupStore(t)
-
+	ctx, s := store.SetupStore(t)
+	user := &store.User{
+		ID:           uuid.NewString(),
+		Email:        "user@example.com",
+		Subject:      "user|123",
+		FriendlyName: "Test User",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	require.NoError(t, s.CreateUser(ctx, user))
 	entry := &store.AccessEntry{
 		ID:         uuid.NewString(),
 		Identity:   "user|123",

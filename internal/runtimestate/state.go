@@ -1,4 +1,9 @@
-package state
+// runtimestate implements the core logic for reconciling the declared state
+// of LLM backends (from dbInstance) with their actual observed state.
+// It provides the functionality for synchronizing models and processing downloads,
+// intended to be executed repeatedly within background tasks managed externally.
+// TODO: rewire for new pool feature
+package runtimestate
 
 import (
 	"context"
@@ -15,41 +20,70 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
+// LLMState represents the observed state of a single LLM backend.
 type LLMState struct {
 	ID           string                  `json:"id"`
 	Name         string                  `json:"name"`
 	Models       []string                `json:"models"`
 	PulledModels []api.ListModelResponse `json:"pulledModels"`
 	Backend      store.Backend           `json:"backend"`
-	Error        string                  `json:"error,omitempty"`
+	// Error stores a description of the last encountered error when
+	// interacting with or reconciling this backend's state, if any.
+	Error string `json:"error,omitempty"`
 }
 
+// State manages the overall runtime status of multiple LLM backends.
+// It orchestrates the synchronization between the desired configuration
+// and the actual state of the backends, including providing the mechanism
+// for model downloads via the dwqueue component.
 type State struct {
-	dbInstance      libdb.DBManager
-	state           sync.Map
-	psInstance      libbus.Messenger
-	dwQueue         dwqueue
-	securityEnabled bool
-	jwtSecret       string
+	dbInstance libdb.DBManager
+	state      sync.Map
+	psInstance libbus.Messenger
+	dwQueue    dwqueue
 }
 
-// TODO: implement pools feature
-func New(dbInstance libdb.DBManager, psInstance libbus.Messenger) *State {
+// New creates and initializes a new State manager.
+// It requires a database manager (dbInstance) to load the desired configurations
+// and a messenger instance (psInstance) for event handling and progress updates.
+// Returns an initialized State ready for use.
+func New(ctx context.Context, dbInstance libdb.DBManager, psInstance libbus.Messenger) (*State, error) {
 	return &State{
 		dbInstance: dbInstance,
 		state:      sync.Map{},
 		dwQueue:    dwqueue{dbInstance: dbInstance},
 		psInstance: psInstance,
-	}
+	}, nil
 }
 
-// RunBackendCycle synchronizes backends as before.
+// RunBackendCycle performs a single reconciliation check for all configured LLM backends.
+// It compares the desired state (from configuration) with the observed state
+// (by communicating with the backends) and schedules necessary actions,
+// such as queuing model downloads or removals, to align them.
+// This method should be called periodically in a background process.
+// DESIGN NOTE: This method executes one complete reconciliation cycle and then returns.
+// It does not manage its own background execution (e.g., via internal goroutines or timers).
+// This deliberate design choice delegates execution management (scheduling, concurrency control,
+// lifecycle via context, error handling, circuit breaking, etc.) entirely to the caller.
+//
+// Consequently, this method should be called periodically by an external process
+// responsible for its scheduling and lifecycle.
 func (s *State) RunBackendCycle(ctx context.Context) error {
 	return s.syncBackends(ctx)
 }
 
-// RunDownloadCycle continuously pops and processes download jobs.
-// It processes one job at a time until the queue is empty.
+// RunDownloadCycle processes a single pending model download operation, if one exists.
+// It retrieves the next download task, executes the download while providing
+// progress updates, and handles potential cancellation requests.
+// If no download tasks are queued, it returns nil immediately.
+// This method should be called periodically in a background process to
+// drain the download queue.
+// DESIGN NOTE: this method performs one unit of work
+// and returns. The caller is responsible for the execution loop, allowing
+// flexible integration with task management strategies.
+//
+// This method should be called periodically by an external process to
+// drain the download queue.
 func (s *State) RunDownloadCycle(ctx context.Context) error {
 	item, err := s.dwQueue.pop(ctx)
 	if err != nil {
@@ -60,7 +94,7 @@ func (s *State) RunDownloadCycle(ctx context.Context) error {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // Ensure we clean up the context when done
+	defer cancel() // clean up the context when done
 
 	done := make(chan struct{})
 
@@ -86,7 +120,10 @@ func (s *State) RunDownloadCycle(ctx context.Context) error {
 					log.Println("Error unmarshalling cancel message:", err)
 					continue
 				}
-				if queueItem.ID == item.URL {
+				// Check if the cancellation request matches the current download task.
+				// Rationale: Matching logic based on URL to target a specific backend
+				// or Model ID to purge a model from all backends, if it is currently downloading.
+				if queueItem.ID == item.URL || queueItem.ID == item.Model {
 					cancel()
 				}
 			case <-ctx.Done():
@@ -103,16 +140,18 @@ func (s *State) RunDownloadCycle(ctx context.Context) error {
 	})
 
 	if err != nil {
-		log.Printf("Error downloading model %s: %v", item.Model, err)
+		return fmt.Errorf("failed downloading model %s: %w", item.Model, err)
 	}
 
-	cancel() // Ensure any waiting goroutines can exit
-	<-done   // Wait for the cancel watcher to finish cleanup
+	cancel()
+	<-done
 
 	return nil
 }
 
-// Get returns a copy of the current service state.
+// Get returns a copy of the current observed state for all backends.
+// This provides a safe snapshot for reading state without risking modification
+// of the internal structures.
 func (s *State) Get(ctx context.Context) map[string]LLMState {
 	state := map[string]LLMState{}
 	s.state.Range(func(key, value any) bool {
@@ -136,7 +175,10 @@ func (s *State) Get(ctx context.Context) map[string]LLMState {
 	return state
 }
 
-// syncBackends synchronizes the list of backends and declared models.
+// syncBackends is the core reconciliation logic called by RunBackendCycle.
+// It fetches the current list of desired backends and models from the database,
+// triggers processing for each configured backend, and removes any state
+// related to backends that are no longer configured.
 func (s *State) syncBackends(ctx context.Context) error {
 	tx := s.dbInstance.WithoutTransaction()
 
@@ -171,6 +213,10 @@ func (s *State) syncBackends(ctx context.Context) error {
 	return nil
 }
 
+// processBackend routes the backend processing logic based on the backend's Type.
+// It acts as a dispatcher to type-specific handling functions (e.g., for Ollama).
+// It updates the internal state map with the results of the processing,
+// including any errors encountered for unsupported types.
 func (s *State) processBackend(ctx context.Context, backend *store.Backend, declaredOllamaModels []*store.Model) {
 	switch backend.Type {
 	case "Ollama":
@@ -188,6 +234,13 @@ func (s *State) processBackend(ctx context.Context, backend *store.Backend, decl
 	}
 }
 
+// processOllamaBackend handles the state reconciliation for a single Ollama backend.
+// It connects to the Ollama API, compares the set of declared models for this backend
+// with the models actually present on the Ollama instance, and takes corrective actions:
+// - Queues downloads for declared models that are missing.
+// - Initiates deletion for models present on the instance but not declared in the config.
+// Finally, it updates the internal state map with the latest observed list of pulled models
+// and any communication errors encountered.
 func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend, declaredOllamaModels []*store.Model) {
 	log.Printf("Processing Ollama backend for ID %s with declared models: %+v", backend.ID, declaredOllamaModels)
 
@@ -197,7 +250,7 @@ func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend
 	}
 	log.Printf("Extracted model names for backend %s: %v", backend.ID, models)
 
-	u, err := url.Parse(backend.BaseURL)
+	backendURL, err := url.Parse(backend.BaseURL)
 	if err != nil {
 		log.Printf("Error parsing URL for backend %s: %v", backend.ID, err)
 		stateservice := &LLMState{
@@ -211,9 +264,9 @@ func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend
 		s.state.Store(backend.ID, stateservice)
 		return
 	}
-	log.Printf("Parsed URL for backend %s: %s", backend.ID, u.String())
+	log.Printf("Parsed URL for backend %s: %s", backend.ID, backendURL.String())
 
-	client := api.NewClient(u, http.DefaultClient)
+	client := api.NewClient(backendURL, http.DefaultClient)
 	existingModels, err := client.List(ctx)
 	if err != nil {
 		log.Printf("Error listing models for backend %s: %v", backend.ID, err)
@@ -246,7 +299,23 @@ func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend
 	for declaredModel := range declaredModelSet {
 		if _, ok := existingModelSet[declaredModel]; !ok {
 			log.Printf("Model %s is declared but missing in backend %s. Adding to download queue.", declaredModel, backend.ID)
-			err := s.dwQueue.add(ctx, *u, declaredModel)
+			// RATIONALE: Using the backend URL as the Job ID in the queue prevents
+			// queueing multiple downloads for the same backend simultaneously,
+			// acting as a simple lock at the queue level.
+			// Download flow:
+			// 1. The sync cycle re-evaluates the full desired vs. actual state
+			//    periodically. It will re-detect *all* currently missing models on each run.
+			// 2. Therefore, the queue doesn't need to store a "TODO" list of all
+			//    pending downloads for a backend. A single job per backend URL acts as
+			//    a sufficient signal that *a* download action is required.
+			// 3. The specific model placed in this job's payload reflects one missing model
+			//    identified during the *most recent* sync cycle run.
+			// 4. When this model is downloaded, the *next* sync cycle will identify the
+			//    *next* missing model (if any) and trigger the queue again, eventually
+			//    leading to all models being downloaded over successive cycles.
+			// 5. If the backeend dies while downloading this mechanism will ensure that
+			//    the downloadjob will be readded to the queue.
+			err := s.dwQueue.add(ctx, *backendURL, declaredModel)
 			if err != nil {
 				log.Printf("Error adding model %s to download queue: %v", declaredModel, err)
 			}
@@ -254,6 +323,8 @@ func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend
 	}
 
 	// For each model in the backend that is not declared, trigger deletion.
+	// NOTE: We have to delete otherwise we have keep track of not desired model in each backend to
+	// ensure some backend-nodes don't just run out of space.
 	for existingModel := range existingModelSet {
 		if _, ok := declaredModelSet[existingModel]; !ok {
 			log.Printf("Model %s exists in backend %s but is not declared. Triggering deletion.", existingModel, backend.ID)
@@ -293,15 +364,4 @@ func (s *State) processOllamaBackend(ctx context.Context, backend *store.Backend
 	}
 	s.state.Store(backend.ID, stateservice)
 	log.Printf("Stored updated state for backend %s", backend.ID)
-}
-
-func FindModel(ctx context.Context, state *State, selectedModel string) (*LLMState, error) {
-	for _, backendState := range state.Get(ctx) {
-		for _, model := range backendState.PulledModels {
-			if selectedModel == model.Model {
-				return &backendState, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("the selected Model is not ready for usage")
 }

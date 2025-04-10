@@ -13,7 +13,7 @@ import (
 func TestAESCBCHMAC_EncryptDecrypt(t *testing.T) {
 	key, err := libcipher.GenerateKey(64)
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatalf("%s", err)
 	}
 	integrityKey := key[32:]
 	encryptionKey := key[:32]

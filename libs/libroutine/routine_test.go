@@ -3,6 +3,7 @@ package libroutine_test
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -205,4 +206,235 @@ func TestCircuitBreaker_ForceClose(t *testing.T) {
 	if !rm.Allow() {
 		t.Errorf("expected Allow to return true after ForceClose")
 	}
+}
+
+// TestRoutine_Execute_ReturnsErrCircuitOpen specifically verifies that Execute
+// returns the correct error type when the circuit is open.
+func TestRoutine_Execute_ReturnsErrCircuitOpen(t *testing.T) {
+	rm := libroutine.NewRoutine(1, time.Minute) // Long timeout
+
+	// Force open
+	rm.ForceOpen()
+
+	err := rm.Execute(context.Background(), func(ctx context.Context) error {
+		t.Error("Function should not have been executed when circuit is open")
+		return nil
+	})
+
+	if !errors.Is(err, libroutine.ErrCircuitOpen) {
+		t.Errorf("Expected error to be ErrCircuitOpen, got %v", err)
+	}
+}
+
+// TestSuite for ExecuteWithRetry
+func TestRoutine_ExecuteWithRetry(t *testing.T) {
+	t.Run("SuccessFirstTry", func(t *testing.T) {
+		rm := libroutine.NewRoutine(1, time.Minute)
+		var callCount int32
+		fn := func(ctx context.Context) error {
+			atomic.AddInt32(&callCount, 1)
+			return nil
+		}
+		err := rm.ExecuteWithRetry(context.Background(), 10*time.Millisecond, 3, fn)
+		if err != nil {
+			t.Errorf("Expected success, got error: %v", err)
+		}
+		if atomic.LoadInt32(&callCount) != 1 {
+			t.Errorf("Expected function to be called 1 time, got %d", atomic.LoadInt32(&callCount))
+		}
+	})
+
+	t.Run("SuccessAfterRetry", func(t *testing.T) {
+		rm := libroutine.NewRoutine(5, time.Minute) // High threshold to prevent opening
+		var callCount int32
+		testErr := errors.New("retry error")
+		fn := func(ctx context.Context) error {
+			count := atomic.AddInt32(&callCount, 1)
+			if count < 3 {
+				return testErr
+			}
+			return nil // Success on 3rd try
+		}
+		err := rm.ExecuteWithRetry(context.Background(), 10*time.Millisecond, 5, fn) // Allow 5 attempts
+		if err != nil {
+			t.Errorf("Expected success after retries, got error: %v", err)
+		}
+		if atomic.LoadInt32(&callCount) != 3 {
+			t.Errorf("Expected function to be called 3 times, got %d", atomic.LoadInt32(&callCount))
+		}
+	})
+
+	t.Run("FailureAllRetries", func(t *testing.T) {
+		rm := libroutine.NewRoutine(5, time.Minute) // High threshold
+		var callCount int32
+		testErr := errors.New("persistent error")
+		fn := func(ctx context.Context) error {
+			atomic.AddInt32(&callCount, 1)
+			return testErr
+		}
+		err := rm.ExecuteWithRetry(context.Background(), 10*time.Millisecond, 3, fn) // 3 attempts
+		if !errors.Is(err, testErr) {
+			t.Errorf("Expected persistent error %v, got %v", testErr, err)
+		}
+		if atomic.LoadInt32(&callCount) != 3 {
+			t.Errorf("Expected function to be called 3 times, got %d", atomic.LoadInt32(&callCount))
+		}
+	})
+
+	t.Run("FailureCircuitOpen", func(t *testing.T) {
+		rm := libroutine.NewRoutine(1, time.Minute) // Low threshold
+		var callCount int32
+		fn := func(ctx context.Context) error {
+			atomic.AddInt32(&callCount, 1)
+			return errors.New("failure") // Fail immediately
+		}
+		// First call opens the circuit
+		_ = rm.Execute(context.Background(), fn)
+		if rm.GetState() != libroutine.Open {
+			t.Fatalf("Circuit should be open")
+		}
+
+		// Now try ExecuteWithRetry
+		atomic.StoreInt32(&callCount, 0) // Reset counter
+		err := rm.ExecuteWithRetry(context.Background(), 10*time.Millisecond, 3, fn)
+
+		// It should immediately return ErrCircuitOpen without calling fn again
+		if !errors.Is(err, libroutine.ErrCircuitOpen) {
+			t.Errorf("Expected ErrCircuitOpen when circuit is already open, got %v", err)
+		}
+		if atomic.LoadInt32(&callCount) != 0 {
+			t.Errorf("Expected function not to be called when circuit is open, called %d times", atomic.LoadInt32(&callCount))
+		}
+	})
+
+	t.Run("ContextCancelledDuringSleep", func(t *testing.T) {
+		rm := libroutine.NewRoutine(5, time.Minute)
+		var callCount int32
+		testErr := errors.New("fail first")
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		fn := func(innerCtx context.Context) error {
+			count := atomic.AddInt32(&callCount, 1)
+			if count == 1 {
+				// Cancel context *after* the first call fails, during the sleep
+				go func() {
+					time.Sleep(5 * time.Millisecond) // Give time for ExecuteWithRetry to start sleeping
+					cancel()
+				}()
+				return testErr
+			}
+			t.Errorf("Function should not be called more than once")
+			return nil
+		}
+
+		err := rm.ExecuteWithRetry(ctx, 50*time.Millisecond, 3, fn) // Longish sleep
+
+		// Check if the context error is returned
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("Expected context.Canceled error, got %v", err)
+		}
+		if atomic.LoadInt32(&callCount) != 1 {
+			t.Errorf("Expected function to be called 1 time, got %d", atomic.LoadInt32(&callCount))
+		}
+	})
+
+	// Note: Testing ContextCancelledDuringExecution is harder without a way
+	// for fn to reliably block and detect cancellation *during* its run
+	// within the retry framework. This often requires more complex fn mocks.
+}
+
+// TestRoutine_Loop_Trigger verifies that the trigger channel causes immediate execution.
+func TestRoutine_Loop_Trigger(t *testing.T) {
+	rm := libroutine.NewRoutine(1, time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	triggerChan := make(chan struct{}, 1)
+	executedChan := make(chan bool, 2)
+
+	fn := func(ctx context.Context) error {
+		select {
+		case executedChan <- true:
+		default:
+		}
+		return nil
+	}
+
+	// Start loop with a very long interval
+	go rm.Loop(ctx, 1*time.Minute, triggerChan, fn, func(err error) {})
+
+	// Wait for the initial execution which happens immediately.
+	select {
+	case <-executedChan:
+		// Drain the first immediate execution.
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Initial execution did not occur as expected")
+	}
+
+	// Send trigger.
+	triggerChan <- struct{}{}
+
+	// Wait for execution signal due to trigger.
+	select {
+	case <-executedChan:
+		// Success! The trigger caused immediate execution.
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Function did not execute after trigger within timeout")
+	}
+}
+
+// TestRoutine_Loop_ErrHandling verifies the error handling callback is invoked.
+func TestRoutine_Loop_ErrHandling(t *testing.T) {
+	rm := libroutine.NewRoutine(1, time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	triggerChan := make(chan struct{}, 1)
+	errChan := make(chan error, 1) // Channel to receive error from callback
+	testErr := errors.New("loop function error")
+
+	fn := func(ctx context.Context) error {
+		return testErr // Always return an error
+	}
+
+	errHandling := func(err error) {
+		select {
+		case errChan <- err: // Send error to test goroutine
+		default:
+		}
+	}
+
+	// Start loop with a long interval, rely on trigger
+	go rm.Loop(ctx, 1*time.Minute, triggerChan, fn, errHandling)
+
+	// Trigger execution
+	triggerChan <- struct{}{}
+
+	// Wait for the error handling callback to signal
+	select {
+	case receivedErr := <-errChan:
+		if !errors.Is(receivedErr, testErr) {
+			t.Errorf("Error handler received unexpected error. Got %v, want %v", receivedErr, testErr)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Error handler was not called within timeout")
+	}
+
+	// Test ErrCircuitOpen case
+	if rm.GetState() != libroutine.Open {
+		t.Fatalf("Circuit should be Open after one failure")
+	}
+	// Trigger again
+	triggerChan <- struct{}{}
+	select {
+	case receivedErr := <-errChan:
+		if !errors.Is(receivedErr, libroutine.ErrCircuitOpen) {
+			t.Errorf("Error handler received unexpected error when circuit open. Got %v, want %v", receivedErr, libroutine.ErrCircuitOpen)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Error handler was not called within timeout when circuit was open")
+	}
+
 }

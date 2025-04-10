@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	authCookieName       = "auth_token"
-	cookieExpiryDuration = time.Hour
+	authCookieName = "auth_token"
 )
 
 func AddAuthRoutes(mux *http.ServeMux, userService *userservice.Service) {
@@ -23,8 +22,10 @@ func AddAuthRoutes(mux *http.ServeMux, userService *userservice.Service) {
 	mux.HandleFunc("POST /register", a.register) // Resource Owner Password Credentials Flow use only for M2M & BfF
 	mux.HandleFunc("POST /token_refresh", a.tokenRefresh)
 
+	mux.HandleFunc("GET /ui/me", a.uiMe)
 	mux.HandleFunc("POST /ui/login", a.uiLogin)
 	mux.HandleFunc("POST /ui/logout", a.uiLogout)
+	mux.HandleFunc("POST /ui/register", a.uiRegister)
 	mux.HandleFunc("POST /ui/token_refresh", a.uiTokenRefresh)
 
 }
@@ -103,6 +104,49 @@ func (a *authManager) tokenRefresh(w http.ResponseWriter, r *http.Request) {
 	_ = serverops.Encode(w, r, http.StatusOK, response)
 }
 
+func (a *authManager) uiRegister(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Decode the registration request
+	var req userservice.CreateUserRequest
+	req, err := serverops.Decode[userservice.CreateUserRequest](r)
+	if err != nil {
+		_ = serverops.Error(w, r, err, serverops.CreateOperation)
+		return
+	}
+
+	result, err := a.userService.Register(ctx, req)
+	if err != nil {
+		_ = serverops.Error(w, r, err, serverops.CreateOperation)
+		return
+	}
+
+	cookie := &http.Cookie{
+		Name:     authCookieName,
+		Value:    result.Token,
+		Path:     "/",
+		Expires:  result.ExpiresAt,
+		SameSite: http.SameSiteStrictMode,
+		HttpOnly: true,
+		Secure:   false, // TODO: Set to true if using HTTPS
+	}
+	http.SetCookie(w, cookie)
+
+	_ = serverops.Encode(w, r, http.StatusCreated, result.User)
+}
+
+func (a *authManager) uiMe(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	result, err := a.userService.GetUserFromContext(ctx)
+	if err != nil {
+		_ = serverops.Error(w, r, err, serverops.AuthorizeOperation)
+		return
+	}
+
+	_ = serverops.Encode(w, r, http.StatusOK, result)
+}
+
 // uiLogin handles a login request by authenticating the user and setting an HTTP-only cookie with the token.
 func (a *authManager) uiLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -124,17 +168,13 @@ func (a *authManager) uiLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    result.Token,
 		Path:     "/",
 		Expires:  result.ExpiresAt,
+		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,  // prevents JS access to the cookie
 		Secure:   false, // TODO: Set to true if using HTTPS
 	}
 	http.SetCookie(w, cookie)
 
-	// Optionally, you may include the user info in the response (excluding the token).
-	_ = serverops.Encode(w, r, http.StatusOK, struct {
-		User *userservice.Result `json:"user"`
-	}{
-		User: result,
-	})
+	_ = serverops.Encode(w, r, http.StatusOK, result.User)
 }
 
 // uiLogout clears the authentication cookie.
@@ -145,6 +185,7 @@ func (a *authManager) uiLogout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		Expires:  time.Unix(0, 0),
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   false, // TODO: Set to true if using HTTPS
@@ -181,12 +222,12 @@ func (a *authManager) uiTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		Value:    newToken,
 		Path:     "/",
 		Expires:  expiresAt,
+		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,
 		Secure:   false, // todo: set to true if using HTTPS
 	}
 	http.SetCookie(w, newCookie)
 
-	// Optionally, return a success message.
 	_ = serverops.Encode(w, r, http.StatusOK, map[string]string{
 		"message": "token refreshed",
 	})

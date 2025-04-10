@@ -15,9 +15,7 @@ var (
 )
 
 type Service struct {
-	dbInstance      libdb.DBManager
-	securityEnabled bool
-	jwtSecret       string
+	dbInstance libdb.DBManager
 }
 
 func New(db libdb.DBManager) *Service {

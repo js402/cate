@@ -195,3 +195,54 @@ func (s *store) ListUsers(ctx context.Context, createdAtCursor time.Time) ([]*Us
 
 	return users, nil
 }
+
+func (s *store) ListUsersBySubjects(ctx context.Context, subjects ...string) ([]*User, error) {
+	if len(subjects) == 0 {
+		return []*User{}, nil
+	}
+	q := ""
+	args := make([]any, 0, len(subjects)+1)
+	for i, v := range subjects {
+		q += fmt.Sprintf("$%d", i+1)
+		if i < len(subjects)-1 {
+			q += ", "
+		}
+		args = append(args, v)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, friendly_name, email, subject, hashed_password, recovery_code_hash, salt, created_at, updated_at
+		FROM users
+		WHERE subject IN (%s) ORDER BY created_at DESC`, q)
+
+	rows, err := s.Exec.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to query users", err)
+	}
+	defer rows.Close()
+
+	users := []*User{}
+	for rows.Next() {
+		var user User
+		if err := rows.Scan(
+			&user.ID,
+			&user.FriendlyName,
+			&user.Email,
+			&user.Subject,
+			&user.HashedPassword,
+			&user.RecoveryCodeHash,
+			&user.Salt,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("%w: failed to scan user", err)
+		}
+		users = append(users, &user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: rows iteration error", err)
+	}
+
+	return users, nil
+}

@@ -12,7 +12,7 @@ import (
 
 // TestCreateAndGetBlob verifies that a blob can be created and then retrieved by its ID.
 func TestCreateAndGetBlob(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	blob := &store.Blob{
 		ID:   uuid.NewString(),
@@ -38,7 +38,7 @@ func TestCreateAndGetBlob(t *testing.T) {
 
 // TestGetBlobByIDNotFound verifies that attempting to retrieve a non-existent blob returns ErrNotFound.
 func TestGetBlobByIDNotFound(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Attempt to get a blob with a random ID that hasn't been created.
 	_, err := s.GetBlobByID(ctx, uuid.NewString())
@@ -47,7 +47,7 @@ func TestGetBlobByIDNotFound(t *testing.T) {
 
 // TestDeleteBlob verifies that a blob can be deleted successfully.
 func TestDeleteBlob(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Create a blob to delete.
 	blob := &store.Blob{

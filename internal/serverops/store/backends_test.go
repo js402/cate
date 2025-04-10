@@ -11,7 +11,7 @@ import (
 )
 
 func TestCreateAndGetBackend(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	backend := &store.Backend{
 		ID:      uuid.NewString(),
@@ -36,7 +36,7 @@ func TestCreateAndGetBackend(t *testing.T) {
 }
 
 func TestUpdateBackend(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	backend := &store.Backend{
 		ID:      uuid.NewString(),
@@ -68,7 +68,7 @@ func TestUpdateBackend(t *testing.T) {
 }
 
 func TestDeleteBackend(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	backend := &store.Backend{
 		ID:      uuid.NewString(),
@@ -91,8 +91,9 @@ func TestDeleteBackend(t *testing.T) {
 }
 
 func TestListBackends(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
+	// Initially, the list should be empty.
 	backends, err := s.ListBackends(ctx)
 	require.NoError(t, err)
 	require.Empty(t, backends)
@@ -125,7 +126,7 @@ func TestListBackends(t *testing.T) {
 }
 
 func TestGetBackendByName(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	backend := &store.Backend{
 		ID:      uuid.NewString(),
@@ -145,7 +146,7 @@ func TestGetBackendByName(t *testing.T) {
 }
 
 func TestGetNonExistentBackend(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	// Test retrieval by a non-existent ID.
 	_, err := s.GetBackend(ctx, uuid.NewString())

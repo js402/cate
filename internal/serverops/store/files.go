@@ -14,16 +14,16 @@ func (s *store) CreateFile(ctx context.Context, file *File) error {
 	now := time.Now().UTC()
 	file.CreatedAt = now
 	file.UpdatedAt = now
-
 	_, err := s.Exec.ExecContext(ctx, `
         INSERT INTO files
-        (id, path, type, meta, blobs_id, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        (id, path, type, meta, blobs_id, is_folder, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		file.ID,
 		file.Path,
 		file.Type,
 		file.Meta,
 		file.BlobsID,
+		file.IsFolder,
 		file.CreatedAt,
 		file.UpdatedAt,
 	)
@@ -33,7 +33,7 @@ func (s *store) CreateFile(ctx context.Context, file *File) error {
 func (s *store) GetFileByID(ctx context.Context, id string) (*File, error) {
 	var file File
 	err := s.Exec.QueryRowContext(ctx, `
-        SELECT id, path, type, meta, blobs_id, created_at, updated_at
+        SELECT id, path, type, meta, blobs_id, is_folder, created_at, updated_at
         FROM files
         WHERE id = $1`,
 		id,
@@ -43,6 +43,7 @@ func (s *store) GetFileByID(ctx context.Context, id string) (*File, error) {
 		&file.Type,
 		&file.Meta,
 		&file.BlobsID,
+		&file.IsFolder,
 		&file.CreatedAt,
 		&file.UpdatedAt,
 	)
@@ -53,12 +54,12 @@ func (s *store) GetFileByID(ctx context.Context, id string) (*File, error) {
 	return &file, err
 }
 
-func (s *store) GetFilesByPath(ctx context.Context, path string) ([]File, error) {
+func (s *store) ListFilesByPath(ctx context.Context, path string) ([]File, error) {
 	rows, err := s.Exec.QueryContext(ctx, `
-        SELECT id, path, type, meta, blobs_id, created_at, updated_at
+        SELECT id, path, type, meta, blobs_id, is_folder, created_at, updated_at
         FROM files
-        WHERE path = $1`,
-		path,
+        WHERE path LIKE $1`,
+		path+"%",
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, libdb.ErrNotFound
@@ -76,6 +77,7 @@ func (s *store) GetFilesByPath(ctx context.Context, path string) ([]File, error)
 			&file.Type,
 			&file.Meta,
 			&file.BlobsID,
+			&file.IsFolder,
 			&file.CreatedAt,
 			&file.UpdatedAt,
 		); err != nil {
@@ -98,13 +100,15 @@ func (s *store) UpdateFile(ctx context.Context, file *File) error {
         SET path = $2,
             type = $3,
             meta = $4,
-            blobs_id = $5,
-            updated_at = $6
+            is_folder = $5,
+            blobs_id = $6,
+            updated_at = $7
         WHERE id = $1`,
 		file.ID,
 		file.Path,
 		file.Type,
 		file.Meta,
+		file.IsFolder,
 		file.BlobsID,
 		file.UpdatedAt,
 	)
@@ -112,6 +116,63 @@ func (s *store) UpdateFile(ctx context.Context, file *File) error {
 	if err != nil {
 		return fmt.Errorf("failed to update file: %w", err)
 	}
+	return checkRowsAffected(result)
+}
+
+func (s *store) UpdateFilePath(ctx context.Context, id string, newPath string) error {
+	now := time.Now().UTC()
+
+	result, err := s.Exec.ExecContext(ctx, `
+		UPDATE files
+		SET path = $2,
+			updated_at = $3
+		WHERE id = $1`,
+		id,
+		newPath,
+		now,
+	)
+	if err != nil {
+		return err
+	}
+
+	return checkRowsAffected(result)
+}
+
+func (s *store) BulkUpdateFilePaths(ctx context.Context, updates map[string]string) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	sqlPrefix := "UPDATE files SET updated_at = $1, path = CASE id "
+	sqlSuffix := " END WHERE id IN ("
+	args := []any{now}
+	ids := []string{}
+	i := 2
+
+	for id, newPath := range updates {
+		sqlPrefix += fmt.Sprintf("WHEN $%d THEN $%d ", i, i+1)
+		args = append(args, id, newPath)
+		ids = append(ids, fmt.Sprintf("$%d", i))
+		i += 2
+	}
+	sqlPrefix += "ELSE path" // to avoid avoid SQL errors, not be strictly necessary with WHERE IN
+
+	// Build WHERE IN clause placeholders ($N, $N+1, ...)
+	placeholders := ""
+	for j := range len(updates) {
+		placeholders += fmt.Sprintf("$%d", j*2+2) // Reference the ID args
+		if j < len(updates)-1 {
+			placeholders += ","
+		}
+	}
+
+	finalSQL := sqlPrefix + sqlSuffix + placeholders + ")"
+
+	result, err := s.Exec.ExecContext(ctx, finalSQL, args...)
+	if err != nil {
+		return fmt.Errorf("failed bulk update paths with CASE: %w", err)
+	}
+
 	return checkRowsAffected(result)
 }
 
@@ -128,7 +189,7 @@ func (s *store) DeleteFile(ctx context.Context, id string) error {
 	return checkRowsAffected(result)
 }
 
-func (s *store) ListAllPaths(ctx context.Context) ([]string, error) {
+func (s *store) ListFiles(ctx context.Context) ([]string, error) {
 	rows, err := s.Exec.QueryContext(ctx, `
         SELECT DISTINCT path FROM files
     `)
@@ -149,4 +210,23 @@ func (s *store) ListAllPaths(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
 	}
 	return paths, nil
+}
+
+func (s *store) EstimateFileCount(ctx context.Context) (int64, error) {
+	var count int64
+	err := s.Exec.QueryRowContext(ctx, `
+		SELECT estimate_row_count('files')
+	`).Scan(&count)
+	return count, err
+}
+
+func (s *store) EnforceMaxFileCount(ctx context.Context, maxCount int64) error {
+	count, err := s.EstimateFileCount(ctx)
+	if err != nil {
+		return err
+	}
+	if count >= maxCount {
+		return fmt.Errorf("file limit reached (max 60,000)")
+	}
+	return nil
 }

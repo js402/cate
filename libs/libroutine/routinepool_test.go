@@ -2,6 +2,7 @@ package libroutine_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -215,4 +216,56 @@ func TestPoolParameterPersistence(t *testing.T) {
 			t.Errorf("Expected timeout %v, got %v", initialTimeout, manager.GetResetTimeout())
 		}
 	})
+}
+
+// TestPoolResetRoutine verifies the ResetRoutine function correctly forces
+// the associated circuit breaker to the Closed state.
+func TestPoolResetRoutine(t *testing.T) {
+	pool := libroutine.GetPool()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure context cleanup eventually
+
+	key := "reset-routine-test"
+	var runCount int
+	var runCountMu sync.Mutex
+
+	// Start a loop that does nothing but increments a counter (to ensure manager exists)
+	pool.StartLoop(ctx, key, 1, 10*time.Millisecond, 10*time.Millisecond, func(ctx context.Context) error {
+		runCountMu.Lock()
+		runCount++
+		runCountMu.Unlock()
+		// Fail once to ensure state can change, then succeed
+		if runCount <= 1 {
+			return errors.New("fail once")
+		}
+		return nil
+	})
+
+	// Allow the loop to run and potentially fail once
+	time.Sleep(50 * time.Millisecond) // Give it time to execute/fail
+
+	// Get the manager and force it open (or verify it opened)
+	manager := pool.GetManager(key)
+	if manager == nil {
+		t.Fatalf("Manager for key %s not found", key)
+	}
+	manager.ForceOpen() // Explicitly force open for predictable test state
+
+	// Verify it's open
+	if manager.GetState() != libroutine.Open {
+		t.Fatalf("Manager state should be Open after ForceOpen, got %v", manager.GetState())
+	}
+
+	// Now, reset the routine via the Pool
+	pool.ResetRoutine(key)
+
+	// Verify the state is now Closed
+	if manager.GetState() != libroutine.Closed {
+		t.Errorf("Expected manager state to be Closed after ResetRoutine, got %v", manager.GetState())
+	}
+
+	// Verify execution is allowed again
+	if !manager.Allow() {
+		t.Error("Execution should be allowed after ResetRoutine")
+	}
 }

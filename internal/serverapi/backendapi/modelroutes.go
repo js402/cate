@@ -2,26 +2,29 @@ package backendapi
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/serverops/store"
+	"github.com/js402/CATE/internal/services/downloadservice"
 	"github.com/js402/CATE/internal/services/modelservice"
 )
 
-func AddModelRoutes(mux *http.ServeMux, _ *serverops.Config, modelService *modelservice.Service) {
-	m := &modelManager{service: modelService}
+func AddModelRoutes(mux *http.ServeMux, _ *serverops.Config, modelService *modelservice.Service, dwService *downloadservice.Service) {
+	s := &service{service: modelService, dwService: dwService}
 
-	mux.HandleFunc("POST /models", m.append)
-	mux.HandleFunc("GET /models", m.list)
-	mux.HandleFunc("DELETE /models/{model}", m.delete)
+	mux.HandleFunc("POST /models", s.append)
+	mux.HandleFunc("GET /models", s.list)
+	mux.HandleFunc("DELETE /models/{model}", s.delete)
 }
 
-type modelManager struct {
-	service *modelservice.Service
+type service struct {
+	service   *modelservice.Service
+	dwService *downloadservice.Service
 }
 
-func (m *modelManager) append(w http.ResponseWriter, r *http.Request) {
+func (s *service) append(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	model, err := serverops.Decode[store.Model](r)
@@ -31,7 +34,7 @@ func (m *modelManager) append(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model.ID = uuid.NewString()
-	if err := m.service.Append(ctx, &model); err != nil {
+	if err := s.service.Append(ctx, &model); err != nil {
 		_ = serverops.Error(w, r, err, serverops.CreateOperation)
 		return
 	}
@@ -39,10 +42,10 @@ func (m *modelManager) append(w http.ResponseWriter, r *http.Request) {
 	_ = serverops.Encode(w, r, http.StatusCreated, model)
 }
 
-func (m *modelManager) list(w http.ResponseWriter, r *http.Request) {
+func (s *service) list(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	models, err := m.service.List(ctx)
+	models, err := s.service.List(ctx)
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.ListOperation)
 		return
@@ -51,16 +54,27 @@ func (m *modelManager) list(w http.ResponseWriter, r *http.Request) {
 	_ = serverops.Encode(w, r, http.StatusOK, models)
 }
 
-func (m *modelManager) delete(w http.ResponseWriter, r *http.Request) {
+func (s *service) delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	modelName := r.PathValue("model")
+	modelName := url.PathEscape(r.PathValue("model"))
 	if modelName == "" {
 		serverops.Error(w, r, serverops.ErrBadPathValue("model name required"), serverops.DeleteOperation)
 		return
 	}
-	if err := m.service.Delete(ctx, modelName); err != nil {
+	if err := s.service.Delete(ctx, modelName); err != nil {
 		_ = serverops.Error(w, r, err, serverops.DeleteOperation)
 		return
+	}
+	queue := r.URL.Query().Get("purge")
+	if queue == "true" {
+		if err := s.dwService.RemoveFromQueue(r.Context(), modelName); err != nil {
+			_ = serverops.Error(w, r, err, serverops.DeleteOperation)
+			return
+		}
+		if err := s.dwService.CancelDownloads(r.Context(), modelName); err != nil {
+			_ = serverops.Error(w, r, err, serverops.DeleteOperation)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

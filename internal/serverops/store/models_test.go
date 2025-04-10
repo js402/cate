@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/js402/CATE/internal/serverops/store"
 	"github.com/js402/CATE/libs/libdb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAppendAndGetAllModels(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	models, err := s.ListModels(ctx)
 	require.NoError(t, err)
@@ -18,6 +19,7 @@ func TestAppendAndGetAllModels(t *testing.T) {
 
 	// Append a new model.
 	model := &store.Model{
+		ID:    uuid.New().String(),
 		Model: "test-model",
 	}
 	err = s.AppendModel(ctx, model)
@@ -34,9 +36,10 @@ func TestAppendAndGetAllModels(t *testing.T) {
 }
 
 func TestDeleteModel(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	model := &store.Model{
+		ID:    uuid.New().String(),
 		Model: "model-to-delete",
 	}
 	err := s.AppendModel(ctx, model)
@@ -51,16 +54,17 @@ func TestDeleteModel(t *testing.T) {
 }
 
 func TestDeleteNonExistentModel(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	err := s.DeleteModel(ctx, "non-existent-model")
 	require.ErrorIs(t, err, libdb.ErrNotFound)
 }
 
 func TestGetAllModelsOrder(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	model1 := &store.Model{
+		ID:    uuid.New().String(),
 		Model: "model1",
 	}
 	err := s.AppendModel(ctx, model1)
@@ -69,6 +73,7 @@ func TestGetAllModelsOrder(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	model2 := &store.Model{
+		ID:    uuid.New().String(),
 		Model: "model2",
 	}
 	err = s.AppendModel(ctx, model2)
@@ -83,7 +88,7 @@ func TestGetAllModelsOrder(t *testing.T) {
 }
 
 func TestAppendDuplicateModel(t *testing.T) {
-	ctx, s := SetupStore(t)
+	ctx, s := store.SetupStore(t)
 
 	model := &store.Model{
 		Model: "duplicate-model",

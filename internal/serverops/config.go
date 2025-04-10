@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -27,6 +26,7 @@ type Config struct {
 	SecurityEnabled string `json:"security_enabled"`
 	OpensearchURL   string `json:"opensearch_url"`
 	ProxyOrigin     string `json:"proxy_origin"`
+	UIBaseURL       string `json:"ui_base_url"`
 }
 
 func LoadConfig(cfg *Config) error {
@@ -41,7 +41,7 @@ func LoadConfig(cfg *Config) error {
 		config[key] = value
 	}
 
-	// Handle JSON unmarshalling (for other fields)
+	// Marshal the environment variables and unmarshal into the config struct.
 	b, err := json.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("this is a bug, loadConfig failed to marshal environment variables: %w", err)
@@ -56,48 +56,46 @@ func LoadConfig(cfg *Config) error {
 
 func ValidateConfig(cfg *Config) error {
 	if cfg.DatabaseURL == "" {
-		return fmt.Errorf("missing required configuration: DatabaseURL")
+		return fmt.Errorf("missing required configuration: database_url")
 	}
 	if cfg.Port == "" {
-		return fmt.Errorf("missing required configuration: Port")
+		return fmt.Errorf("missing required configuration: port")
 	}
 	if len(cfg.Addr) == 0 {
 		cfg.Addr = "0.0.0.0" // Default to all interfaces
 	}
 	if len(cfg.AllowedMethods) == 0 {
 		cfg.AllowedMethods = "GET, POST, PUT, DELETE, OPTIONS"
-		log.Println("AllowedMethods not set, using default:", cfg.AllowedMethods)
+		log.Println("allowed_methods not set, using default:", cfg.AllowedMethods)
 	}
 	if len(cfg.AllowedHeaders) == 0 {
 		cfg.AllowedHeaders = "Content-Type, Authorization"
-		log.Println("AllowedHeaders not set, using default:", cfg.AllowedHeaders)
+		log.Println("allowed_headers not set, using default:", cfg.AllowedHeaders)
 	}
 	if len(cfg.AllowedOrigins) == 0 {
 		cfg.AllowedOrigins = "*" // Default to allow all origins
-		log.Println("AllowedOrigins not set, using default:", cfg.AllowedOrigins)
+		log.Println("allowed_origins not set, using default:", cfg.AllowedOrigins)
 	}
-
-	// Validate SigningKey
+	// Validate SigningKey: require at least 16 characters.
 	if len(cfg.SigningKey) < 16 {
-		return fmt.Errorf("missing or invalid required configuration: SigningKey (must be at least 8 characters)")
+		return fmt.Errorf("missing or invalid required configuration: signing_key (must be at least 16 characters)")
 	}
-
-	// Validate EncryptionKey
+	// Validate EncryptionKey: require at least 16 characters.
 	if len(cfg.EncryptionKey) < 16 {
-		return fmt.Errorf("missing or invalid required configuration: EncryptionKey (must be at least 8 characters)")
+		return fmt.Errorf("missing or invalid required configuration: encryption_key (must be at least 16 characters)")
 	}
-
-	// Validate JWTSecret
+	// Validate JWTSecret: require at least 16 characters.
 	if len(cfg.JWTSecret) < 16 {
-		return fmt.Errorf("missing or invalid required configuration: JWTSecret (must be at least 16 characters)")
+		return fmt.Errorf("missing or invalid required configuration: jwt_secret (must be at least 16 characters)")
 	}
-	_, err := strconv.Atoi(cfg.JWTExpiry)
-	if err != nil {
-		return fmt.Errorf("invalid JWTExpiry format: must be a number representing hours (e.g., '24' for 24 hours) %w", err)
+	// Ensure UIBaseURL is provided for the reverse proxy.
+	if cfg.UIBaseURL == "" {
+		return fmt.Errorf("missing required configuration: ui_base_url")
 	}
-
-	if !strings.Contains("true false", cfg.SecurityEnabled) {
-		return fmt.Errorf("invalig configuration security is not set to true or false")
+	// Validate SecurityEnabled: must be "true" or "false" (case-insensitive).
+	secEnabled := strings.ToLower(strings.TrimSpace(cfg.SecurityEnabled))
+	if secEnabled != "true" && secEnabled != "false" {
+		return fmt.Errorf("invalid configuration: security_enabled must be 'true' or 'false'")
 	}
 
 	return nil

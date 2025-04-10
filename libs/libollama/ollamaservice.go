@@ -59,7 +59,7 @@ func SetupLocalInstance(ctx context.Context) (string, testcontainers.Container, 
 	const maxRetries = 5
 	const retryInterval = 1 * time.Second
 	var heartbeatErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		heartbeatErr = client.Heartbeat(ctx)
 		if heartbeatErr == nil {
 			break
