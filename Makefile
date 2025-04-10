@@ -27,13 +27,13 @@ wait-for-server:
 	@echo "Server is up!"
 
 ui-install:
-	yarn workspaces focus @docs-beam/ui
+	yarn workspaces focus @cate/ui
 
 ui-package: ui-install
-	yarn workspace @docs-beam/ui build
+	yarn workspace @cate/ui build
 
 ui-build: ui-package
-	yarn prettier --check .
+    yarn prettier:check
 	yarn build
 
 ui-run: ui-build wait-for-server

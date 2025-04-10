@@ -6016,7 +6016,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lerna@npm:^8.2.1":
+"lerna@npm:^8.2.2":
   version: 8.2.2
   resolution: "lerna@npm:8.2.2"
   dependencies:
@@ -8544,7 +8544,7 @@ __metadata:
     esbuild: "npm:^0.25.1"
     i18next: "npm:^24.2.3"
     jsx-runtime: "npm:^1.2.0"
-    lerna: "npm:^8.2.1"
+    lerna: "npm:^8.2.2"
     lucide-react: "npm:^0.479.0"
     next: "npm:^15.2.4"
     nookies: "npm:^2.5.2"

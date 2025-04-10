@@ -9,8 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "yarn prettier:check && yarn prettier:write",
-    "prettier:check": "prettier --check .",
-    "prettier": "prettier --write ."
+    "prettier:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "prettier": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
   },
   "dependencies": {
     "@cate/ui": "file:../packages/ui",

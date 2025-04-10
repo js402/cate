@@ -1,0 +1,15 @@
+# Build artifacts
+dist/
+build/
+.next/
+out/
+.turbo/
+.eslintcache
+
+# Package managers
+node_modules/
+.yarn/
+
+# Other
+coverage/
+*.log
