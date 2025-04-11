@@ -154,10 +154,22 @@ func (s *Service) Chat(ctx context.Context, subjectID uuid.UUID, message string,
 	if err != nil {
 		return "", fmt.Errorf("failed to chat %w", err)
 	}
+	assistantMsgData := struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{
+		Role:    responseMessage.Role,
+		Content: responseMessage.Content,
+	}
+	jsonData, err := json.Marshal(assistantMsgData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal assistant message data: %w", err)
+	}
+
 	err = s.msgRepo.Save(ctx, messagerepo.Message{
 		ID:          uuid.New().String(),
 		MessageID:   "0",
-		Data:        fmt.Sprintf(`{"role": "%s", "content": "%s"}`, responseMessage.Role, responseMessage.Content),
+		Data:        string(jsonData), // Save the marshaled JSON string
 		Source:      "chatservice",
 		SpecVersion: "v1",
 		Type:        "chat_message",
