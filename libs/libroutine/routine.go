@@ -206,7 +206,7 @@ func (rm *Routine) ExecuteWithRetry(ctx context.Context, interval time.Duration,
 	var err error
 	for i := range iterations {
 		if ctx.Err() != nil {
-			log.Println("Context cancelled, aborting retries")
+			// log.Println("Context cancelled, aborting retries")
 			return context.Cause(ctx)
 		}
 		log.Printf("Retry attempt %d", i+1)
@@ -242,7 +242,7 @@ func (rm *Routine) Loop(ctx context.Context, interval time.Duration, triggerChan
 		}
 		select {
 		case <-ctx.Done():
-			log.Println("Loop exiting due to context cancellation")
+			// log.Println("Loop exiting due to context cancellation")
 			return
 		case <-triggerChan:
 		//	log.Println("Trigger received, executing immediately")

@@ -12,6 +12,7 @@ import (
 )
 
 func TestPoolSingleton(t *testing.T) {
+	defer quiet()
 	t.Run("should return singleton instance", func(t *testing.T) {
 		pool1 := libroutine.GetPool()
 		pool2 := libroutine.GetPool()
@@ -110,7 +111,7 @@ func TestPoolStartLoop(t *testing.T) {
 		var callCount int
 		var mu sync.Mutex
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -136,6 +137,8 @@ func TestPoolStartLoop(t *testing.T) {
 }
 
 func TestPoolCircuitBreaking(t *testing.T) {
+	defer quiet()
+
 	pool := libroutine.GetPool()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -187,6 +190,7 @@ func TestPoolCircuitBreaking(t *testing.T) {
 }
 
 func TestPoolParameterPersistence(t *testing.T) {
+	defer quiet()
 	pool := libroutine.GetPool()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -221,6 +225,7 @@ func TestPoolParameterPersistence(t *testing.T) {
 // TestPoolResetRoutine verifies the ResetRoutine function correctly forces
 // the associated circuit breaker to the Closed state.
 func TestPoolResetRoutine(t *testing.T) {
+	defer quiet()
 	pool := libroutine.GetPool()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensure context cleanup eventually

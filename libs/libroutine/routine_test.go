@@ -3,6 +3,8 @@ package libroutine_test
 import (
 	"context"
 	"errors"
+	"log"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -10,7 +12,23 @@ import (
 	"github.com/js402/CATE/libs/libroutine"
 )
 
+func quiet() func() {
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	serr := os.Stderr
+	os.Stdout = null
+	os.Stderr = null
+	log.SetOutput(null)
+	return func() {
+		defer null.Close()
+		os.Stdout = sout
+		os.Stderr = serr
+		log.SetOutput(os.Stderr)
+	}
+}
+
 func TestCircuitBreaker_ClosedState_AllowsExecution(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(3, time.Second)
 
 	if !rm.Allow() {
@@ -27,6 +45,7 @@ func TestCircuitBreaker_ClosedState_AllowsExecution(t *testing.T) {
 }
 
 func TestCircuitBreaker_OpensAfterFailures(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, 500*time.Millisecond)
 
 	err := rm.Execute(context.Background(), func(ctx context.Context) error {
@@ -43,6 +62,7 @@ func TestCircuitBreaker_OpensAfterFailures(t *testing.T) {
 }
 
 func TestCircuitBreaker_HalfOpenAfterTimeout(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, 200*time.Millisecond)
 
 	// Cause the circuit to open
@@ -71,6 +91,7 @@ func TestCircuitBreaker_HalfOpenAfterTimeout(t *testing.T) {
 }
 
 func TestCircuitBreaker_RecoversFromHalfOpenOnSuccess(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, 200*time.Millisecond)
 
 	// Cause the circuit to open
@@ -97,6 +118,7 @@ func TestCircuitBreaker_RecoversFromHalfOpenOnSuccess(t *testing.T) {
 }
 
 func TestCircuitBreaker_ReopensAfterFailureInHalfOpen(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, 200*time.Millisecond)
 
 	// Cause the circuit to open
@@ -119,6 +141,7 @@ func TestCircuitBreaker_ReopensAfterFailureInHalfOpen(t *testing.T) {
 }
 
 func TestCircuitBreaker_LoopExecutesFunction(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, time.Second)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -145,6 +168,7 @@ func TestCircuitBreaker_LoopExecutesFunction(t *testing.T) {
 	}
 }
 func TestCircuitBreaker_GetState(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(2, time.Second)
 
 	if rm.GetState() != libroutine.Closed {
@@ -165,6 +189,7 @@ func TestCircuitBreaker_GetState(t *testing.T) {
 }
 
 func TestCircuitBreaker_GetThreshold(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(3, time.Second)
 
 	if rm.GetThreshold() != 3 {
@@ -173,6 +198,7 @@ func TestCircuitBreaker_GetThreshold(t *testing.T) {
 }
 
 func TestCircuitBreaker_GetResetTimeout(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(3, 2*time.Second)
 
 	if rm.GetResetTimeout() != 2*time.Second {
@@ -180,6 +206,7 @@ func TestCircuitBreaker_GetResetTimeout(t *testing.T) {
 	}
 }
 func TestCircuitBreaker_ForceOpen(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(2, time.Second)
 
 	rm.ForceOpen()
@@ -193,6 +220,7 @@ func TestCircuitBreaker_ForceOpen(t *testing.T) {
 }
 
 func TestCircuitBreaker_ForceClose(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(2, time.Second)
 
 	// Force the circuit to open
@@ -211,6 +239,7 @@ func TestCircuitBreaker_ForceClose(t *testing.T) {
 // TestRoutine_Execute_ReturnsErrCircuitOpen specifically verifies that Execute
 // returns the correct error type when the circuit is open.
 func TestRoutine_Execute_ReturnsErrCircuitOpen(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, time.Minute) // Long timeout
 
 	// Force open
@@ -228,6 +257,7 @@ func TestRoutine_Execute_ReturnsErrCircuitOpen(t *testing.T) {
 
 // TestSuite for ExecuteWithRetry
 func TestRoutine_ExecuteWithRetry(t *testing.T) {
+	defer quiet()
 	t.Run("SuccessFirstTry", func(t *testing.T) {
 		rm := libroutine.NewRoutine(1, time.Minute)
 		var callCount int32
@@ -347,6 +377,7 @@ func TestRoutine_ExecuteWithRetry(t *testing.T) {
 
 // TestRoutine_Loop_Trigger verifies that the trigger channel causes immediate execution.
 func TestRoutine_Loop_Trigger(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, time.Minute)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -387,6 +418,7 @@ func TestRoutine_Loop_Trigger(t *testing.T) {
 
 // TestRoutine_Loop_ErrHandling verifies the error handling callback is invoked.
 func TestRoutine_Loop_ErrHandling(t *testing.T) {
+	defer quiet()
 	rm := libroutine.NewRoutine(1, time.Minute)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
