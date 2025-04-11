@@ -7,11 +7,11 @@ import (
 	"github.com/js402/CATE/internal/modelprovider"
 	"github.com/js402/CATE/internal/serverops"
 	"github.com/js402/CATE/internal/services/chatservice"
-	"github.com/stretchr/testify/assert" // Use assert for non-fatal checks where useful
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestOllamaChatClient_HappyPath(t *testing.T) { // Renamed for clarity
+func TestOllamaChatClient_HappyPath(t *testing.T) {
 	ctx, backendState, cleanup := chatservice.SetupTestEnvironment(t)
 	defer cleanup()
 	runtime := backendState.Get(ctx)
