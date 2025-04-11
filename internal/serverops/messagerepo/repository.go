@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -408,11 +409,27 @@ func (idx *Index) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func quiet() func() {
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	serr := os.Stderr
+	os.Stdout = null
+	os.Stderr = null
+	log.SetOutput(null)
+	return func() {
+		defer null.Close()
+		os.Stdout = sout
+		os.Stderr = serr
+		log.SetOutput(os.Stderr)
+	}
+}
+
 // NewTestStore initializes an Index instance backed by a test container.
 // This is intended for integration testing purposes.
 func NewTestStore(t *testing.T) (Store, func(), error) {
 	t.Helper()
-
+	unquiet := quiet()
+	t.Cleanup(unquiet)
 	ctx := context.TODO()
 	fmt.Println("Starting test storage container...")
 	ctr, err := tcopensearch.Run(ctx, "opensearchproject/opensearch:2.11.1")

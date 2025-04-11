@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"log"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -241,9 +243,29 @@ func New(exec libdb.Exec) Store {
 	return &store{exec}
 }
 
+func quiet() func() {
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	serr := os.Stderr
+	os.Stdout = null
+	os.Stderr = null
+	log.SetOutput(null)
+	return func() {
+		defer null.Close()
+		os.Stdout = sout
+		os.Stderr = serr
+		log.SetOutput(os.Stderr)
+	}
+}
+
 // setupStore initializes a test Postgres instance and returns the store.
 func SetupStore(t *testing.T) (context.Context, Store) {
 	t.Helper()
+
+	// Silence logs
+	unquiet := quiet()
+	t.Cleanup(unquiet)
+
 	ctx := context.TODO()
 	connStr, _, cleanup, err := libdb.SetupLocalInstance(ctx, "test", "test", "test")
 	require.NoError(t, err)
@@ -251,10 +273,9 @@ func SetupStore(t *testing.T) (context.Context, Store) {
 	dbManager, err := libdb.NewPostgresDBManager(ctx, connStr, Schema)
 	require.NoError(t, err)
 
-	// Ensure cleanup of resources when the test completes.
+	// Cleanup DB and container
 	t.Cleanup(func() {
-		err := dbManager.Close()
-		require.NoError(t, err)
+		require.NoError(t, dbManager.Close())
 		cleanup()
 	})
 

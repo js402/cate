@@ -3,6 +3,7 @@ package libbus
 import (
 	"context"
 	"log"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,7 +11,23 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/nats"
 )
 
+func quiet() func() {
+	null, _ := os.Open(os.DevNull)
+	sout := os.Stdout
+	serr := os.Stderr
+	os.Stdout = null
+	os.Stderr = null
+	log.SetOutput(null)
+	return func() {
+		defer null.Close()
+		os.Stdout = sout
+		os.Stderr = serr
+		log.SetOutput(os.Stderr)
+	}
+}
+
 func SetupNatsInstance(ctx context.Context) (string, testcontainers.Container, func(), error) {
+	defer quiet()()
 	cleanup := func() {}
 	natsContainer, err := nats.Run(ctx, "nats:2.10")
 	if err != nil {
