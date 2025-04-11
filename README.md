@@ -37,11 +37,33 @@ CATE combines several technologies to deliver its features:
     - Users are expected to provide external dependencies like **PostgreSQL** and **Valkey**.
     - A `docker-compose.yml` file is provided for convenience, but operators typically deploy the CATE container image(s) directly and manage configuration externally.
 
-## ⚙️ WIP - Work In Progress
+## 📊 Current State (As of April 2025)
 
-This project is currently under heavy development.
+CATE is in **active development**, while end-to-end features are still being refined and integrated, the following capabilities have established implementations:
 
-## Starting the Development Environment
+* **Core Backend Services:** Modular Go services including llm-backend/model management (`backendservice`), chat session logic (`chatservice`), file handling (`fileservice`), user/access control (`userservice`, `accessservice`)
+* **Persistence & State:** Storage logic (`internal/serverops/store`) is implemented for core entities using PostgreSQL, OpenSearch (via message repo), and Valkey (via `libkv`). State synchronization for Ollama backends is functional.
+* **Foundational Libraries:** Core libraries (`libs/`) provide reusable components for DB/KV access, authentication (`libauth`), messaging (`libbus`), crypto (`libcipher`) and Ollama interaction (`libollama`).
+* **API & UI Structure:** The React frontend (`frontend/`) includes routing, core pages for chat, admin (users, backends) and JWT authentication flow via a BFF is implemented.
+* **Basic Operations:** The system is containerized (`Dockerfile`, `compose.yaml`), includes build/run processes (`Makefile`).
+
+## 🛠️ Current Development Slice
+
+* [ ] **Backend Pooling** Finalizing the implementation for grouping backends manageable pools/fleets assigning models to them.
+* [ ] **Tokenizer Service Migration** Moving tokenizer logic into a dedicated service to optimize core service build times and resource usage.
+* [ ] **Document Ingestion Pipeline:** Building the initial RAG pipeline, with Python workers, to parse and process documents from the filestore and ingest the embeddings into opensearch.
+* [ ] **LLM Resolver:** Improving the logic (`llmresolver`) for selecting the optimal backend instance and model for requests, via a scoring synstem and routing policies.
+* [ ] **Fixing wireing:** Making all already build features are integrated and fully functional E2E.
+
+## 🗺️ Roadmap (Near-Term Focus)
+
+Development is dynamic, but the immediate priorities are centered on bringing the core features online:
+
+1.  **Semantic Search:** Implementing search capabilities over ingested documents using vector embeddings.
+2.  **Contextual Chat (RAG):** Enhancing chat sessions to utilize retrieved document context for grounded responses.
+3.  **Task Handling (Templates):** Building the UI and backend logic for defining and executing simple user task templates.
+
+## ⚙️ Starting the Development Environment
 
 1.  **Prepare the Environment**
     * Copy and edit `.env-example` into a new `.env` file with the proper configuration.
