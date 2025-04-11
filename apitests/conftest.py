@@ -3,7 +3,7 @@ import uuid
 import requests
 import logging
 
-BASE_URL = "http://localhost:8081"
+BASE_URL = "http://localhost:8081/api"
 
 # Configure the root logger
 logging.basicConfig(level=logging.ERROR,

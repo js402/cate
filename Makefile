@@ -1,4 +1,4 @@
-.PHONY: test benchmarks run build down logs ui-install ui-package ui-build ui-run api-test api-init
+.PHONY: test benchmarks run build down logs ui-install ui-package ui-build ui-run api-test api-init wait-for-server
 
 test:
 	go test -v ./...
@@ -42,9 +42,17 @@ ui-build: ui-package
 ui-run: ui-build
 	yarn workspace frontend dev --host
 
-api-init:
+api-test-init:
 	python3 -m venv apitests/.venv
 	. apitests/.venv/bin/activate && pip install -r apitests/requirements.txt
 
-api-test: run
+wait-for-server:
+	@echo "Waiting for server to be ready..."
+	@until wget --spider -q http://localhost:8081/api/health; do \
+		echo "Server not yet available, waiting..."; \
+		sleep 2; \
+	done
+	@echo "Server is up!"
+
+api-test: run wait-for-server
 	. apitests/.venv/bin/activate && pytest apitests/
