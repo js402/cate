@@ -47,14 +47,16 @@ CATE is in **active development**, while end-to-end features are still being ref
 * **API & UI Structure:** The React frontend (`frontend/`) includes routing, core pages for chat, admin (users, backends) and JWT authentication flow via a BFF is implemented.
 * **Basic Operations:** The system is containerized (`Dockerfile`, `compose.yaml`), includes build/run processes (`Makefile`).
 
-## 🛠️ Current Development Slice (Semantic Search)
+## 🛠️ Current Development Slice
 
+-> Semantic Search
 * [ ] **Backend Pooling** Finalizing the implementation for grouping backends manageable pools/fleets assigning models to them.
 * [ ] **Tokenizer Service Migration** Moving tokenizer logic into a dedicated service to optimize core service build times and resource usage.
 * [ ] **Document Ingestion Pipeline:** Building the initial RAG pipeline, with Python workers, to parse and process documents from the filestore and ingest the embeddings into opensearch.
 * [ ] **LLM Resolver:** Improving the logic (`llmresolver`) for selecting the optimal backend instance and model for requests, via a scoring system and routing policies.
 * [ ] **UI-Search:** Develop a UI-Search page to demo semantic search.
 * [ ] **Fixing wiring:** Ensuring previously built features are fully integrated and functional E2E.
+* [ ] **Cleaning:** Fix failing tests and get a basic CI running.
 
 ## 🗺️ Roadmap (Near-Term Focus)
 
