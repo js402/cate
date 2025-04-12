@@ -247,7 +247,7 @@ func TestConcurrentTokenization(t *testing.T) {
 	// Preload models to avoid network delays during concurrent testing
 	tokenizer, err := libollama.NewTokenizer(
 		libollama.TokenizerWithHTTPClient(httpClient),
-		libollama.TokenizerWithPreloadedModels("tiny", "llama-3.1"),
+		libollama.TokenizerWithPreloadedModels("tiny", "granite-embedding-30m"),
 		libollama.TokenizerWithFallbackModel("tiny"),
 	)
 	if err != nil {

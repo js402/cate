@@ -74,9 +74,10 @@ type TokenizerModelMappings struct {
 // fmt.Printf("Tokens: %v\n", tokens)
 func NewTokenizer(opts ...TokenizerOption) (Tokenizer, error) {
 	defaultModelURLs := map[string]string{
-		"tiny":      "https://huggingface.co/Hjgugugjhuhjggg/FastThink-0.5B-Tiny-Q2_K-GGUF/resolve/main/fastthink-0.5b-tiny-q2_k.gguf",
-		"llama-3.1": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-IQ2_M.gguf",
-		"llama-3.2": "https://huggingface.co/unsloth/Llama-3.2-3B-Instruct-GGUF/blob/main/Llama-3.2-3B-Instruct-Q2_K.gguf",
+		"tiny":                  "https://huggingface.co/Hjgugugjhuhjggg/FastThink-0.5B-Tiny-Q2_K-GGUF/resolve/main/fastthink-0.5b-tiny-q2_k.gguf",
+		"llama-3.1":             "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-IQ2_M.gguf",
+		"llama-3.2":             "https://huggingface.co/unsloth/Llama-3.2-3B-Instruct-GGUF/blob/main/Llama-3.2-3B-Instruct-Q2_K.gguf",
+		"granite-embedding-30m": "https://huggingface.co/bartowski/granite-embedding-30m-english-GGUF/resolve/main/granite-embedding-30m-english-f16.gguf",
 		// RESTRICTED: "gemma-2b":  "https://huggingface.co/google/gemma-2b-GGUF/resolve/main/gemma-2b.gguf",
 		"phi-3": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
 	}
