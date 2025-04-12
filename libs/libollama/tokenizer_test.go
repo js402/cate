@@ -173,8 +173,8 @@ func TestOptimalTokenizerModel(t *testing.T) {
 		expectedModel string
 	}{
 		{
-			basedOnModel:  "llama-3.1",
-			expectedModel: "llama-3.1", // Exact match should return the same model
+			basedOnModel:  "granite-embedding-30m",
+			expectedModel: "granite-embedding-30m",
 		},
 		{
 			basedOnModel:  "llama3.2",
@@ -186,7 +186,7 @@ func TestOptimalTokenizerModel(t *testing.T) {
 		},
 		{
 			basedOnModel:  "nonexistent-model",
-			expectedModel: "tiny", // Fallback should return llama-3.1
+			expectedModel: "tiny",
 		},
 	}
 
@@ -248,7 +248,7 @@ func TestConcurrentTokenization(t *testing.T) {
 	tokenizer, err := libollama.NewTokenizer(
 		libollama.TokenizerWithHTTPClient(httpClient),
 		libollama.TokenizerWithPreloadedModels("tiny", "granite-embedding-30m"),
-		libollama.TokenizerWithFallbackModel("tiny"),
+		libollama.TokenizerWithFallbackModel("granite-embedding-30m"),
 	)
 	if err != nil {
 		t.Fatalf("failed to initialize tokenizer: %v", err)
@@ -261,7 +261,7 @@ func TestConcurrentTokenization(t *testing.T) {
 	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			model := "tiny"
+			model := "granite-embedding-30m"
 			if id%2 == 0 {
 				model = "llama-3.1"
 			}

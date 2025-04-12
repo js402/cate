@@ -25,10 +25,7 @@ jobs:
       - name: Run tests
         run: |
           set -euo pipefail
-          go list ./... \
-            | grep -vE '/internal/serverapi/.+api$' \
-            | grep -vE '/internal/serverops$' \
-            | xargs go test -json -v 2>&1 | tee /tmp/gotest.log | gotestfmt
+          go test -json -v ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
 
       - name: Upload test log
         uses: actions/upload-artifact@v4
