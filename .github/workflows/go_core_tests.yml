@@ -2,9 +2,9 @@ name: go-core-tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 jobs:
   build:
     name: Test
@@ -28,7 +28,7 @@ jobs:
           go test -json -v ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
 
       - name: Upload test log
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v2.3.1
         if: always()
         with:
           name: test-log
