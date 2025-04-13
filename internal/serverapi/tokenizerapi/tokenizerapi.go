@@ -38,7 +38,7 @@ func (s *server) Tokenize(ctx context.Context, req *tokenizerservicepb.TokenizeR
 	if req.ModelName == "" {
 		return nil, status.Error(codes.InvalidArgument, "model_name is required")
 	}
-	tokens, err := s.coreService.Tokenize(req.ModelName, req.Prompt)
+	tokens, err := s.coreService.Tokenize(ctx, req.ModelName, req.Prompt)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "core service failed to tokenize: %v", err)
 	}
