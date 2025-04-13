@@ -2,6 +2,7 @@ package tokenizerapi
 
 import (
 	"context"
+	"fmt"
 
 	tokenizerservicepb "github.com/js402/CATE/internal/serverapi/tokenizerapi/proto"
 	"github.com/js402/CATE/internal/services/tokenizerservice"
@@ -17,10 +18,9 @@ type server struct {
 	coreService tokenizerservice.Tokenizer
 }
 
-func RegisterTokenizerServiceServer(grpcSrv *grpc.Server, coreSvc tokenizerservice.Tokenizer) {
+func RegisterTokenizerServiceServer(grpcSrv *grpc.Server, coreSvc tokenizerservice.Tokenizer) error {
 	if grpcSrv == nil {
-		// TODO: handle this error more gracefully depending on your setup
-		panic("grpc.Server instance is nil")
+		return fmt.Errorf("grpc.Server instance is nil")
 	}
 	if coreSvc == nil {
 		panic("core tokenizerservice.Service instance is nil")
@@ -29,6 +29,7 @@ func RegisterTokenizerServiceServer(grpcSrv *grpc.Server, coreSvc tokenizerservi
 		coreService: coreSvc,
 	}
 	tokenizerservicepb.RegisterTokenizerServiceServer(grpcSrv, adapter)
+	return nil
 }
 
 func (s *server) Tokenize(ctx context.Context, req *tokenizerservicepb.TokenizeRequest) (*tokenizerservicepb.TokenizeResponse, error) {
