@@ -41,19 +41,35 @@ type State struct {
 	state      sync.Map
 	psInstance libbus.Messenger
 	dwQueue    dwqueue
+	withPools  bool
+}
+
+type Option func(*State)
+
+func WithPools() Option {
+	return func(s *State) {
+		s.withPools = true
+	}
 }
 
 // New creates and initializes a new State manager.
 // It requires a database manager (dbInstance) to load the desired configurations
 // and a messenger instance (psInstance) for event handling and progress updates.
+// Options allow enabling experimental features like pool-based reconciliation.
 // Returns an initialized State ready for use.
-func New(ctx context.Context, dbInstance libdb.DBManager, psInstance libbus.Messenger) (*State, error) {
-	return &State{
+func New(ctx context.Context, dbInstance libdb.DBManager, psInstance libbus.Messenger, options ...Option) (*State, error) {
+	s := &State{
 		dbInstance: dbInstance,
 		state:      sync.Map{},
 		dwQueue:    dwqueue{dbInstance: dbInstance},
 		psInstance: psInstance,
-	}, nil
+	}
+
+	// Apply options to configure the State instance
+	for _, option := range options {
+		option(s)
+	}
+	return s, nil
 }
 
 // RunBackendCycle performs a single reconciliation check for all configured LLM backends.
@@ -68,7 +84,11 @@ func New(ctx context.Context, dbInstance libdb.DBManager, psInstance libbus.Mess
 //
 // Consequently, this method should be called periodically by an external process
 // responsible for its scheduling and lifecycle.
+// When the pool feature is enabled via WithPools option, it uses pool-aware reconciliation.
 func (s *State) RunBackendCycle(ctx context.Context) error {
+	if s.withPools {
+		return s.syncBackendsWithPools(ctx)
+	}
 	return s.syncBackends(ctx)
 }
 
@@ -175,29 +195,19 @@ func (s *State) Get(ctx context.Context) map[string]LLMState {
 	return state
 }
 
-// syncBackends is the core reconciliation logic called by RunBackendCycle.
-// It fetches the current list of desired backends and models from the database,
-// triggers processing for each configured backend, and removes any state
-// related to backends that are no longer configured.
-func (s *State) syncBackends(ctx context.Context) error {
-	tx := s.dbInstance.WithoutTransaction()
-
-	backends, err := store.New(tx).ListBackends(ctx)
-	if err != nil {
-		return fmt.Errorf("fetching backends: %v", err)
-	}
-
-	models, err := store.New(tx).ListModels(ctx)
-	if err != nil {
-		return fmt.Errorf("fetching models: %v", err)
-	}
-
-	currentIDs := make(map[string]struct{})
+// Helper method to process backends and collect their IDs
+func (s *State) processBackends(ctx context.Context, backends []*store.Backend, models []*store.Model, currentIDs map[string]struct{}) {
 	for _, backend := range backends {
 		currentIDs[backend.ID] = struct{}{}
 		s.processBackend(ctx, backend, models)
 	}
-	// Remove deleted backends from state.
+}
+
+// cleanupStaleBackends removes state entries for backends not present in currentIDs.
+// It performs type checking on state keys and logs errors for invalid key types.
+// This centralizes the state cleanup logic used by all reconciliation flows.
+func (s *State) cleanupStaleBackends(currentIDs map[string]struct{}) error {
+	var err error
 	s.state.Range(func(key, value any) bool {
 		id, ok := key.(string)
 		if !ok {
@@ -210,7 +220,76 @@ func (s *State) syncBackends(ctx context.Context) error {
 		}
 		return true
 	})
-	return nil
+	return err
+}
+
+// syncBackendsWithPools is the pool-aware reconciliation logic called by RunBackendCycle.
+// It:
+//  1. Fetches all configured pools from the database
+//  2. For each pool:
+//     a. Retrieves associated backends
+//     b. Fetches pool-specific models
+//     c. Processes each backend with its pool's models
+//  3. After processing all pools:
+//     a. Performs global cleanup of state entries for backends not found in any pool
+//
+// This fixed version aggregates backend IDs across all pools before cleanup to prevent
+// premature deletion of valid cross-pool backends.
+func (s *State) syncBackendsWithPools(ctx context.Context) error {
+	tx := s.dbInstance.WithoutTransaction()
+	store := store.New(tx)
+
+	pools, err := store.ListPools(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching pools: %v", err)
+	}
+
+	currentIDs := make(map[string]struct{}) // Shared across all pools
+
+	for _, pool := range pools {
+		backends, err := store.ListBackendsForPool(ctx, pool.ID)
+		if err != nil {
+			return fmt.Errorf("fetching backends for pool %s: %v", pool.ID, err)
+		}
+
+		models, err := store.ListModelsForPool(ctx, pool.ID)
+		if err != nil {
+			return fmt.Errorf("fetching models: %v", err)
+		}
+
+		// Process pool's backends and accumulate IDs
+		s.processBackends(ctx, backends, models, currentIDs)
+	}
+
+	// Single cleanup after processing all pools
+	return s.cleanupStaleBackends(currentIDs)
+}
+
+// syncBackends is the global reconciliation logic called by RunBackendCycle.
+// It:
+// 1. Fetches all configured backends from the database
+// 2. Retrieves all models regardless of pool association
+// 3. Processes each backend with the full model list
+// 4. Cleans up state entries for backends no longer present in the database
+// This version uses the shared helper methods but maintains its original non-pool
+// behavior by operating on the global backend/model lists.
+func (s *State) syncBackends(ctx context.Context) error {
+	tx := s.dbInstance.WithoutTransaction()
+	store := store.New(tx)
+
+	backends, err := store.ListBackends(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching backends: %v", err)
+	}
+
+	models, err := store.ListModels(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching models: %v", err)
+	}
+
+	currentIDs := make(map[string]struct{})
+	s.processBackends(ctx, backends, models, currentIDs)
+	return s.cleanupStaleBackends(currentIDs)
 }
 
 // processBackend routes the backend processing logic based on the backend's Type.
