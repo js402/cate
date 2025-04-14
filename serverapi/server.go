@@ -49,7 +49,7 @@ func New(
 	if err != nil {
 		return nil, cleanup, err
 	}
-	state, err := runtimestate.New(ctx, dbInstance, pubsub)
+	state, err := runtimestate.New(ctx, dbInstance, pubsub, runtimestate.WithPools())
 	if err != nil {
 		return nil, cleanup, err
 	}
