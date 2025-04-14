@@ -36,7 +36,7 @@ export function BackendCard({ backend, onEdit, onDelete, statusMap }: BackendCar
       <P>
         {t('common.type')} {backend.type}
       </P>
-      {backend.models.map(model => (
+      {backend.models?.map(model => (
         <ModelStatusDisplay
           modelName={model}
           downloadStatus={getDownloadStatusForModel(statusMap, backend.baseUrl, model)}
