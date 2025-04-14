@@ -3,7 +3,7 @@ package modelprovider
 import (
 	"context"
 
-	"github.com/js402/CATE/runtimestate"
+	"github.com/js402/cate/runtimestate"
 )
 
 // RuntimeState retrieves available model providers for a specific backend type

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/libs/libauth"
+	"github.com/js402/cate/libs/libauth"
+	"github.com/js402/cate/serverops/store"
 )
 
 const DefaultServerGroup = "server"

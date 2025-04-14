@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/js402/CATE/libs/libdb"
+	"github.com/js402/cate/libs/libdb"
 )
 
 func (s *store) CreateUser(ctx context.Context, user *User) error {

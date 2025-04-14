@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/llmresolver"
-	"github.com/js402/CATE/modelprovider"
-	"github.com/js402/CATE/runtimestate"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/messagerepo"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/services/tokenizerservice"
+	"github.com/js402/cate/llmresolver"
+	"github.com/js402/cate/modelprovider"
+	"github.com/js402/cate/runtimestate"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/messagerepo"
+	"github.com/js402/cate/serverops/store"
+	"github.com/js402/cate/services/tokenizerservice"
 	"github.com/ollama/ollama/api"
 )
 

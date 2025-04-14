@@ -5,10 +5,10 @@ import (
 	"net/url"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/services/downloadservice"
-	"github.com/js402/CATE/services/modelservice"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/store"
+	"github.com/js402/cate/services/downloadservice"
+	"github.com/js402/cate/services/modelservice"
 )
 
 func AddModelRoutes(mux *http.ServeMux, _ *serverops.Config, modelService *modelservice.Service, dwService *downloadservice.Service) {

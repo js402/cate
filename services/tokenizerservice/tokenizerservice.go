@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/libs/libollama"
+	"github.com/js402/cate/libs/libollama"
+	"github.com/js402/cate/serverops"
 )
 
 type Tokenizer interface {

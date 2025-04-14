@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/js402/CATE/libs/libollama"
+	"github.com/js402/cate/libs/libollama"
 )
 
 // Helper function to report operations per second

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/services/downloadservice"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/store"
+	"github.com/js402/cate/services/downloadservice"
 )
 
 func AddQueueRoutes(mux *http.ServeMux, _ *serverops.Config, dwService *downloadservice.Service) {

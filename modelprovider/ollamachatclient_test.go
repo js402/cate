@@ -3,9 +3,9 @@ package modelprovider_test
 import (
 	"testing"
 
-	"github.com/js402/CATE/modelprovider"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/services/chatservice"
+	"github.com/js402/cate/modelprovider"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/services/chatservice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

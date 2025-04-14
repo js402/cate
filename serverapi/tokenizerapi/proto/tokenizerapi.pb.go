@@ -382,7 +382,7 @@ const file_internal_serverapi_tokenizerapi_proto_tokenizerapi_proto_rawDesc = ""
 	"\bTokenize\x12#.tokenizerservicepb.TokenizeRequest\x1a$.tokenizerservicepb.TokenizeResponse\x12^\n" +
 	"\vCountTokens\x12&.tokenizerservicepb.CountTokensRequest\x1a'.tokenizerservicepb.CountTokensResponse\x12V\n" +
 	"\x0fAvailableModels\x12\x16.google.protobuf.Empty\x1a+.tokenizerservicepb.AvailableModelsResponse\x12a\n" +
-	"\fOptimalModel\x12'.tokenizerservicepb.OptimalModelRequest\x1a(.tokenizerservicepb.OptimalModelResponseBIZGgithub.com/js402/CATE/services/tokenizerapi/tokenizerservicepbb\x06proto3"
+	"\fOptimalModel\x12'.tokenizerservicepb.OptimalModelRequest\x1a(.tokenizerservicepb.OptimalModelResponseBIZGgithub.com/js402/cate/services/tokenizerapi/tokenizerservicepbb\x06proto3"
 
 var (
 	file_internal_serverapi_tokenizerapi_proto_tokenizerapi_proto_rawDescOnce sync.Once

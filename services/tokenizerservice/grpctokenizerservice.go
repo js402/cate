@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	tokenizerservicepb "github.com/js402/CATE/serverapi/tokenizerapi/proto"
+	tokenizerservicepb "github.com/js402/cate/serverapi/tokenizerapi/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"

@@ -1,4 +1,4 @@
-module github.com/js402/CATE
+module github.com/js402/cate
 
 go 1.24.1
 

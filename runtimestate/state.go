@@ -14,9 +14,9 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/libs/libbus"
-	"github.com/js402/CATE/libs/libdb"
+	"github.com/js402/cate/libs/libbus"
+	"github.com/js402/cate/libs/libdb"
+	"github.com/js402/cate/serverops/store"
 	"github.com/ollama/ollama/api"
 )
 

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/js402/CATE/libs/libollama"
+	"github.com/js402/cate/libs/libollama"
 	"github.com/ollama/ollama/api"
 	"github.com/stretchr/testify/require"
 )

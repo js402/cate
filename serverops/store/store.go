@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/js402/CATE/libs/libauth"
-	"github.com/js402/CATE/libs/libdb"
+	"github.com/js402/cate/libs/libauth"
+	"github.com/js402/cate/libs/libdb"
 	"github.com/stretchr/testify/require"
 )
 

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/js402/CATE/llmresolver"
-	"github.com/js402/CATE/modelprovider"
+	"github.com/js402/cate/llmresolver"
+	"github.com/js402/cate/modelprovider"
 )
 
 func TestResolveCommon(t *testing.T) {

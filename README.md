@@ -1,10 +1,10 @@
-# CATE: Cognitive AI/Agent Transformation Engine
+# cate: Cognitive AI/Agent Transformation Engine
 
 A modular platform for building context-aware agents, semantic search, and task automation — grounded in your data.
 
 ## 🚀 Project Vision
 
-CATE aims to become a platform for semantic search and user-defined AI agents that operate within specific contexts.
+cate aims to become a platform for semantic search and user-defined AI agents that operate within specific contexts.
 
 The project's vision is focused on delivering these core features:
 
@@ -17,7 +17,7 @@ The project's vision is focused on delivering these core features:
 
 ## 🔧 What's Under the Hood
 
-CATE combines several technologies to deliver its features:
+cate combines several technologies to deliver its features:
 
 - **Core Logic**: The main backend service and LLM Gateway, built in **Go**, provides the primary API and orchestration.
 - **User Interface**: Dashboards and user interactions are handled by a **React** frontend.
@@ -30,11 +30,11 @@ CATE combines several technologies to deliver its features:
 - **Deployment**:
     - The system is designed to run **containerized** (e.g., using Docker).
     - Users are expected to provide external dependencies like **PostgreSQL** and **Valkey**.
-    - A `docker-compose.yml` file is provided for convenience, but operators typically deploy the CATE container image(s) directly and manage configuration externally.
+    - A `docker-compose.yml` file is provided for convenience, but operators typically deploy the cate container image(s) directly and manage configuration externally.
 
 ## 📊 Current State (As of April 2025)
 
-CATE is in **active development**, while end-to-end features are still being refined and integrated, the following capabilities have established implementations:
+cate is in **active development**, while end-to-end features are still being refined and integrated, the following capabilities have established implementations:
 
 * **Core Backend Services:** Modular Go services including llm-backend/model management (`backendservice`), chat session logic (`chatservice`), file handling (`fileservice`), user/access control (`userservice`, `accessservice`)
 * **Persistence & State:** Storage logic (`internal/serverops/store`) is implemented for core entities using PostgreSQL, OpenSearch (via message repo), and Valkey (via `libkv`). State synchronization for Ollama backends is functional.

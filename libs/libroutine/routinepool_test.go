@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/js402/CATE/libs/libroutine"
+	"github.com/js402/cate/libs/libroutine"
 )
 
 func TestPoolSingleton(t *testing.T) {

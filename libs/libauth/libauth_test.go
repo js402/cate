@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/js402/CATE/libs/libauth"
-	"github.com/js402/CATE/libs/libcipher"
+	"github.com/js402/cate/libs/libauth"
+	"github.com/js402/cate/libs/libcipher"
 )
 
 func TestAuthClaims_Valid(t *testing.T) {

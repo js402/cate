@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/serverops/messagerepo"
+	"github.com/js402/cate/serverops/messagerepo"
 	"github.com/stretchr/testify/require"
 )
 

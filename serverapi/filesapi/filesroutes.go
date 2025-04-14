@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/services/fileservice"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/services/fileservice"
 )
 
 const (

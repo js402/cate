@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/serverops/messagerepo"
-	"github.com/js402/CATE/services/chatservice"
-	"github.com/js402/CATE/services/tokenizerservice"
+	"github.com/js402/cate/serverops/messagerepo"
+	"github.com/js402/cate/services/chatservice"
+	"github.com/js402/cate/services/tokenizerservice"
 	"github.com/stretchr/testify/require"
 )
 

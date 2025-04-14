@@ -9,13 +9,13 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/js402/CATE/serverapi"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/messagerepo"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/libs/libbus"
-	"github.com/js402/CATE/libs/libdb"
-	"github.com/js402/CATE/libs/libroutine"
+	"github.com/js402/cate/libs/libbus"
+	"github.com/js402/cate/libs/libdb"
+	"github.com/js402/cate/libs/libroutine"
+	"github.com/js402/cate/serverapi"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/messagerepo"
+	"github.com/js402/cate/serverops/store"
 )
 
 func initDatabase(ctx context.Context, cfg *serverops.Config) (libdb.DBManager, error) {

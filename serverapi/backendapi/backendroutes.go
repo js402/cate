@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/runtimestate"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/services/backendservice"
+	"github.com/js402/cate/runtimestate"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/store"
+	"github.com/js402/cate/services/backendservice"
 	"github.com/ollama/ollama/api"
 )
 

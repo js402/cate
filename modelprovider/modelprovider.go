@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/js402/CATE/serverops"
+	"github.com/js402/cate/serverops"
 	"github.com/ollama/ollama/api"
 	_ "github.com/ollama/ollama/api"
 )

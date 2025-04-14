@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/js402/CATE/serverops"
+	"github.com/js402/cate/serverops"
 	"github.com/ollama/ollama/api"
 )
 

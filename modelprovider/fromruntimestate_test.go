@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/js402/CATE/modelprovider"
-	"github.com/js402/CATE/runtimestate"
-	"github.com/js402/CATE/serverops/store"
+	"github.com/js402/cate/modelprovider"
+	"github.com/js402/cate/runtimestate"
+	"github.com/js402/cate/serverops/store"
 	"github.com/ollama/ollama/api"
 )
 

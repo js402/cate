@@ -3,7 +3,7 @@ package systemapi
 import (
 	"net/http"
 
-	"github.com/js402/CATE/serverops"
+	"github.com/js402/cate/serverops"
 )
 
 type systemRoutes struct {

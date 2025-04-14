@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/js402/CATE/libs/libbus"
+	"github.com/js402/cate/libs/libbus"
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/require"
 )

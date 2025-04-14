@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/libs/libcipher"
+	"github.com/js402/cate/libs/libcipher"
 )
 
 func TestNewHash(t *testing.T) {

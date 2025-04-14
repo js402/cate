@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/libs/libdb"
+	"github.com/js402/cate/libs/libdb"
+	"github.com/js402/cate/serverops/store"
 	"github.com/stretchr/testify/require"
 )
 

@@ -1,4 +1,4 @@
-module github.com/js402/CATE/toknizer
+module github.com/js402/cate/toknizer
 
 go 1.24.1
 
@@ -44,7 +44,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/js402/CATE v0.0.0-20250413095041-abe256f7092c // indirect
+	github.com/js402/cate v0.0.0-20250413095041-abe256f7092c // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect

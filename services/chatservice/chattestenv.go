@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/js402/CATE/runtimestate"
-	"github.com/js402/CATE/serverops"
-	"github.com/js402/CATE/serverops/store"
-	"github.com/js402/CATE/libs/libbus"
-	"github.com/js402/CATE/libs/libdb"
-	"github.com/js402/CATE/libs/libollama"
-	"github.com/js402/CATE/libs/libroutine"
+	"github.com/js402/cate/libs/libbus"
+	"github.com/js402/cate/libs/libdb"
+	"github.com/js402/cate/libs/libollama"
+	"github.com/js402/cate/libs/libroutine"
+	"github.com/js402/cate/runtimestate"
+	"github.com/js402/cate/serverops"
+	"github.com/js402/cate/serverops/store"
 	"github.com/stretchr/testify/require"
 )
 
