@@ -2,7 +2,7 @@ module github.com/js402/cate/core
 
 go 1.24.1
 
-// libauth libbus  libcipher  libdb  libkv  libollama  libroutine
+// libauth libbus  libcipher  libdb  libkv  libollama  libroutine libtestenv
 replace github.com/js402/cate/libs/libauth => ../libs/libauth
 
 replace github.com/js402/cate/libs/libbus => ../libs/libbus
@@ -15,6 +15,8 @@ replace github.com/js402/cate/libs/libkv => ../libs/libkv
 
 replace github.com/js402/cate/libs/libroutine => ../libs/libroutine
 
+replace github.com/js402/cate/libs/libtestenv => ../libs/libtestenv
+
 require (
 	dario.cat/mergo v1.0.1
 	github.com/google/uuid v1.6.0
@@ -23,6 +25,7 @@ require (
 	github.com/js402/cate/libs/libcipher v0.0.0-00010101000000-000000000000
 	github.com/js402/cate/libs/libdb v0.0.0-00010101000000-000000000000
 	github.com/js402/cate/libs/libroutine v0.0.0-00010101000000-000000000000
+	github.com/js402/cate/libs/libtestenv v0.0.0-00010101000000-000000000000
 	github.com/lib/pq v1.10.9
 	github.com/ollama/ollama v0.6.5
 	github.com/opensearch-project/opensearch-go/v4 v4.4.0

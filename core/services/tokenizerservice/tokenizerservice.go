@@ -13,7 +13,6 @@ import (
 type Tokenizer interface {
 	Tokenize(ctx context.Context, modelName string, prompt string) ([]int, error)
 	CountTokens(ctx context.Context, modelName string, prompt string) (int, error)
-	//	AvailableModels(ctx context.Context) ([]string, error)
 	OptimalModel(ctx context.Context, baseModel string) (string, error)
 }
 
