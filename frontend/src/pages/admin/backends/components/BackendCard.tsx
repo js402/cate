@@ -72,7 +72,7 @@ export function BackendCard({ backend, onEdit, onDelete, statusMap }: BackendCar
         value={selectedPool}
         onChange={handleAssignPool}>
         <option value="">{t('backends.select_pool')}</option>
-        {pools.map(pool => (
+        {pools?.map(pool => (
           <option key={pool.id} value={pool.id}>
             {pool.name}
           </option>

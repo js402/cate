@@ -13,7 +13,8 @@ func AddChatRoutes(mux *http.ServeMux, _ *serverops.Config, chatManager *chatser
 	h := &chatManagerHandler{manager: chatManager, stateService: stateService}
 
 	mux.HandleFunc("POST /chats", h.createChat)
-	mux.HandleFunc("POST /chats/{id}/chat/{model}", h.chat)
+	mux.HandleFunc("POST /chats/{id}/chat", h.chat)
+	//mux.HandleFunc("POST /chats/{id}/chat/{model}", h.chat)
 	mux.HandleFunc("POST /chats/{id}/instruction", h.addInstruction)
 	mux.HandleFunc("GET /chats/{id}", h.history)
 	mux.HandleFunc("GET /chats", h.listChats)
@@ -85,7 +86,7 @@ type chatRequest struct {
 func (h *chatManagerHandler) chat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	idStr := r.PathValue("id")
-	model := r.PathValue("model")
+	// model := r.PathValue("model")
 	chatID, err := uuid.Parse(idStr)
 	if err != nil {
 		_ = serverops.Error(w, r, serverops.ErrBadPathValue(err.Error()), serverops.ServerOperation)
@@ -98,7 +99,7 @@ func (h *chatManagerHandler) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := h.manager.Chat(ctx, chatID, req.Message, model)
+	reply, err := h.manager.Chat(ctx, chatID, req.Message)
 	if err != nil {
 		_ = serverops.Error(w, r, err, serverops.ServerOperation)
 		return
