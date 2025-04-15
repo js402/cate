@@ -25,6 +25,7 @@ export type Job = {
 };
 
 export type OllamaAPIModel = {
+  id: string;
   name: string;
   model: string;
 };
