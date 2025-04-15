@@ -85,7 +85,6 @@ other services interface.
 │       │   ├── chatservice_test.go
 ```
 
-
 ### Operational Logic (`serverops`)
 
 ```bash
