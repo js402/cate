@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/js402/cate/core/serverops"
 	"github.com/js402/cate/core/serverops/store"
 	"github.com/js402/cate/libs/libdb"
@@ -26,6 +27,7 @@ func (s *Service) Create(ctx context.Context, pool *store.Pool) error {
 	if err := serverops.CheckServiceAuthorization(ctx, s, store.PermissionManage); err != nil {
 		return err
 	}
+	pool.ID = uuid.New().String()
 	tx := s.dbInstance.WithoutTransaction()
 	return store.New(tx).CreatePool(ctx, pool)
 }
