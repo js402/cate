@@ -57,7 +57,7 @@ export function ModelCard({ model, onDelete, deletePending }: ModelCardProps) {
           onChange={e => handleAssign(e.target.value)}
           disabled={assignMutation.isPending}>
           <option value="">{t('model.select_pool')}</option>
-          {pools.map(pool => (
+          {pools?.map(pool => (
             <option key={pool.id} value={pool.id}>
               {pool.name}
             </option>
