@@ -35,7 +35,7 @@ type ConfigTokenizerService struct {
 	FallbackModel        string `json:"fallback_model"`
 	ModelSourceAuthToken string `json:"model_source_auth_token"`
 	PreloadModels        string `json:"preload_models"`
-	UseDefaultURLs       bool   `json:"use_default_urls"`
+	UseDefaultURLs       string `json:"use_default_urls"`
 }
 
 func LoadConfig[T any](cfg *T) error {

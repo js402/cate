@@ -22,7 +22,7 @@ func RegisterTokenizerService(grpcSrv *grpc.Server, coreSvc tokenizerservice.Tok
 		return fmt.Errorf("grpc.Server instance is nil")
 	}
 	if coreSvc == nil {
-		panic("core tokenizerservice.Service instance is nil")
+		return fmt.Errorf("core tokenizerservice.Service instance is nil")
 	}
 	adapter := &service{
 		coreService: coreSvc,

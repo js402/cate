@@ -12,6 +12,8 @@ services:
         condition: service_started
       opensearch:
         condition: service_healthy
+      tokenizer:
+        condition: service_healthy
     ports:
       - "8081:8080"
     extra_hosts:
@@ -33,9 +35,9 @@ services:
       timeout: 5s
       retries: 10
     environment:
-      - FALLBACK_MODEL=phi3
+      - FALLBACK_MODEL=phi-3
       - USE_DEFAULT_URLS=true
-      - PRELOAD_MODELS=tiny,phi3
+      - PRELOAD_MODELS=tiny,phi-3
       - ADDR=0.0.0.0:50051
 
   postgres:

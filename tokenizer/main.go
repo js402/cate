@@ -18,14 +18,24 @@ func main() {
 		log.Fatalf("failed to load configuration: %v", err)
 	}
 	models := strings.Split(config.PreloadModels, ",")
+	useDefaultURLs := false
+	if config.UseDefaultURLs == "true" {
+		useDefaultURLs = true
+	}
 	coreSvc, err := service.New(
 		service.Config{
 			FallbackModel:  config.FallbackModel,
 			AuthToken:      config.ModelSourceAuthToken,
-			UseDefaultURLs: config.UseDefaultURLs,
+			UseDefaultURLs: useDefaultURLs,
 			PreloadModels:  models,
 		},
 	)
+	if err != nil {
+		log.Fatalf("failed to create tokenizer service: %v", err)
+	}
+	if coreSvc == nil {
+		log.Fatalf("core tokenizerservice.Service instance is nil")
+	}
 	grpcServer := grpc.NewServer()
 
 	if err := tokenizerapi.RegisterTokenizerService(grpcServer, coreSvc); err != nil {
