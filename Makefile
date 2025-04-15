@@ -44,7 +44,7 @@ ui-package: ui-install
 	yarn workspace @cate/ui build
 
 ui-build: ui-package
-    yarn prettier:check
+	yarn install
 	yarn build
 
 ui-run: ui-build
