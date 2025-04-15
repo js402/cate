@@ -12,8 +12,8 @@ services:
         condition: service_started
       opensearch:
         condition: service_healthy
-      tokenizer:
-        condition: service_healthy
+      # tokenizer:
+      #   condition: service_healthy
     ports:
       - "8081:8080"
     extra_hosts:
