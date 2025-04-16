@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS blobs (
     updated_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+    id VARCHAR(36) PRIMARY KEY,
+    stream VARCHAR(36) NOT NULL,
+
+    payload JSONB NOT NULL,
+    added_at TIMESTAMP NOT NULL,
+)
+
 CREATE INDEX IF NOT EXISTS idx_job_queue_v2_task_type ON job_queue_v2 USING hash(task_type);
 CREATE INDEX IF NOT EXISTS idx_accesslists_identity ON accesslists USING hash(identity);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users USING hash(email);
