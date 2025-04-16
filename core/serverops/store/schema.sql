@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS messages (
     stream VARCHAR(36) NOT NULL,
 
     payload JSONB NOT NULL,
-    added_at TIMESTAMP NOT NULL,
+    added_at TIMESTAMP NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_job_queue_v2_task_type ON job_queue_v2 USING hash(task_type);
@@ -112,6 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_accesslists_identity ON accesslists USING hash(id
 CREATE INDEX IF NOT EXISTS idx_users_email ON users USING hash(email);
 CREATE INDEX IF NOT EXISTS idx_users_subject ON users USING hash(subject);
 -- ALTER TABLE users ADD COLUMN IF NOT EXISTS salt TEXT;
+CREATE INDEX IF NOT EXISTS idx_messages_stream ON messages USING hash(stream);
 
 -- For pagination --
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at);

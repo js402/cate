@@ -39,6 +39,13 @@ type Backend struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type Message struct {
+	ID      string    `json:"id"`
+	Stream  string    `json:"stream"`
+	Payload []byte    `json:"payload"`
+	AddedAt time.Time `json:"addedAt"`
+}
+
 type Model struct {
 	ID        string    `json:"id"`
 	Model     string    `json:"model"`
@@ -230,6 +237,10 @@ type Store interface {
 	CreateBlob(ctx context.Context, blob *Blob) error
 	GetBlobByID(ctx context.Context, id string) (*Blob, error)
 	DeleteBlob(ctx context.Context, id string) error
+
+	AppendMessage(ctx context.Context, message *Message) error
+	DeleteMessages(ctx context.Context, stream string) error
+	ListMessages(ctx context.Context, stream string) ([]*Message, error)
 }
 
 //go:embed schema.sql
