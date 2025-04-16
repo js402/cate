@@ -1,6 +1,7 @@
 package modelprovider_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/js402/cate/core/modelprovider"
@@ -18,8 +19,7 @@ func TestOllamaChatClient_HappyPath(t *testing.T) {
 	for _, state := range runtime {
 		url = state.Backend.BaseURL
 	}
-	require.NotEmpty(t, url, "Failed to get backend URL from test setup") // Added check
-
+	require.NotEmpty(t, url, "Failed to get backend URL from test setup")
 	provider := modelprovider.NewOllamaModelProvider("smollm2:135m", []string{url}, modelprovider.WithChat(true))
 	require.True(t, provider.CanChat())
 
@@ -44,6 +44,50 @@ func TestOllamaChatClient_HappyPath(t *testing.T) {
 	t.Logf("Response 2: %s", response2.Content)
 	require.NotEmpty(t, response2.Content)
 	require.Equal(t, "assistant", response2.Role)
+}
+
+func TestOllamaChatClient_LongerHappyPath(t *testing.T) {
+	ctx, backendState, cleanup := chatservice.SetupTestEnvironment(t)
+	defer cleanup()
+	runtime := backendState.Get(ctx)
+	url := ""
+	for _, state := range runtime {
+		url = state.Backend.BaseURL
+	}
+	require.NotEmpty(t, url, "Failed to get backend URL from test setup")
+
+	provider := modelprovider.NewOllamaModelProvider("smollm2:135m", []string{url}, modelprovider.WithChat(true))
+	require.True(t, provider.CanChat())
+
+	client, err := provider.GetChatConnection(url)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	userMessages := []serverops.Message{
+		serverops.Message{Content: "Hello, world!", Role: "user"},
+		serverops.Message{Content: "How are you?", Role: "user"},
+		serverops.Message{Content: "How old are you?", Role: "user"},
+		serverops.Message{Content: "Hey", Role: "user"},
+		serverops.Message{Content: "Where are you from?", Role: "user"},
+		serverops.Message{Content: "What is your favorite color?", Role: "user"},
+		serverops.Message{Content: "What is your favorite food?", Role: "user"},
+		serverops.Message{Content: "What is your favorite movie?", Role: "user"},
+		serverops.Message{Content: "What is your favorite sport?", Role: "user"},
+	}
+	conversation := func(chat []serverops.Message, prompt string) []serverops.Message {
+		chat = append(chat, serverops.Message{Role: "user", Content: prompt})
+		response, err := client.Chat(ctx, chat)
+		require.NoError(t, err)
+		require.NotEmpty(t, response.Content)
+		require.Equal(t, "assistant", response.Role)
+		fmt.Printf("Response: %s /n", response.Content)
+
+		chat = append(chat, response)
+		return chat
+	}
+	chat := []serverops.Message{}
+	for _, message := range userMessages {
+		chat = conversation(chat, message.Content)
+	}
 }
 
 func TestOllamaProvider_GetChatConnection_ChatDisabled(t *testing.T) {
