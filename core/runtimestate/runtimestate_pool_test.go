@@ -17,11 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupPoolTest(t *testing.T) (context.Context, *runtimestate.State, store.Store, func()) {
+func setupPoolTest(t *testing.T) (context.Context, string, *runtimestate.State, store.Store, func()) {
 	ctx := context.TODO()
 
 	// Setup Ollama instance
-	_, _, cleanupOllama, err := libtestenv.SetupLocalInstance(ctx)
+	ollamaUrl, _, cleanupOllama, err := libtestenv.SetupLocalInstance(ctx)
 	require.NoError(t, err)
 
 	// Setup database
@@ -38,7 +38,7 @@ func setupPoolTest(t *testing.T) (context.Context, *runtimestate.State, store.St
 	backendState, err := runtimestate.New(ctx, dbInstance, ps, runtimestate.WithPools())
 	require.NoError(t, err)
 
-	return ctx, backendState, store.New(dbInstance.WithoutTransaction()), func() {
+	return ctx, ollamaUrl, backendState, store.New(dbInstance.WithoutTransaction()), func() {
 		cleanupOllama()
 		cleanupDB()
 		cleanupPS()
@@ -46,7 +46,7 @@ func setupPoolTest(t *testing.T) (context.Context, *runtimestate.State, store.St
 }
 
 func TestPoolAwareStateLogic(t *testing.T) {
-	ctx, backendState, dbStore, cleanup := setupPoolTest(t)
+	ctx, ollamaUrl, backendState, dbStore, cleanup := setupPoolTest(t)
 	defer cleanup()
 
 	triggerChan := make(chan struct{}, 10)
@@ -68,7 +68,7 @@ func TestPoolAwareStateLogic(t *testing.T) {
 	require.NoError(t, dbStore.CreateBackend(ctx, &store.Backend{
 		ID:      backendID,
 		Name:    "pool-backend",
-		BaseURL: "http://localhost:11434",
+		BaseURL: ollamaUrl,
 		Type:    "Ollama",
 	}))
 	require.NoError(t, dbStore.AssignBackendToPool(ctx, poolID, backendID))
@@ -110,7 +110,7 @@ func TestPoolAwareStateLogic(t *testing.T) {
 }
 
 func TestPoolBackendIsolation(t *testing.T) {
-	ctx, backendState, dbStore, cleanup := setupPoolTest(t)
+	ctx, ollamaUrl, backendState, dbStore, cleanup := setupPoolTest(t)
 	defer cleanup()
 
 	// Create two pools
@@ -132,7 +132,7 @@ func TestPoolBackendIsolation(t *testing.T) {
 	require.NoError(t, dbStore.CreateBackend(ctx, &store.Backend{
 		ID:      backend1ID,
 		Name:    "pool-1-backend",
-		BaseURL: "http://localhost:11434",
+		BaseURL: ollamaUrl,
 		Type:    "Ollama",
 	}))
 	require.NoError(t, dbStore.AssignBackendToPool(ctx, pool1ID, backend1ID))
@@ -172,7 +172,7 @@ func TestPoolBackendIsolation(t *testing.T) {
 }
 
 func TestPoolBackendRemoval(t *testing.T) {
-	ctx, backendState, dbStore, cleanup := setupPoolTest(t)
+	ctx, ollamaUrl, backendState, dbStore, cleanup := setupPoolTest(t)
 	defer cleanup()
 
 	// Create pool and backend
@@ -187,7 +187,7 @@ func TestPoolBackendRemoval(t *testing.T) {
 	require.NoError(t, dbStore.CreateBackend(ctx, &store.Backend{
 		ID:      backendID,
 		Name:    "pool-backend",
-		BaseURL: "http://localhost:11434",
+		BaseURL: ollamaUrl,
 		Type:    "Ollama",
 	}))
 	require.NoError(t, dbStore.AssignBackendToPool(ctx, poolID, backendID))
