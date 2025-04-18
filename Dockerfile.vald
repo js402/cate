@@ -1,0 +1,55 @@
+FROM alpine:3.18 AS configgen
+
+WORKDIR /tmp/vald
+
+RUN apk add --no-cache git && \
+    git clone https://github.com/vdaas/vald.git . && \
+    mkdir -p data && \
+    echo '---'                          > data/config.yaml && \
+    echo 'version: v0.0.0'              >> data/config.yaml && \
+    echo 'time_zone: JST'               >> data/config.yaml && \
+    echo 'logging:'                     >> data/config.yaml && \
+    echo '  logger: glg'                >> data/config.yaml && \
+    echo '  level: debug'               >> data/config.yaml && \
+    echo '  format: raw'                >> data/config.yaml && \
+    echo 'server_config:'               >> data/config.yaml && \
+    echo '  servers:'                   >> data/config.yaml && \
+    echo '    - name: agent-grpc'       >> data/config.yaml && \
+    echo '      host: 0.0.0.0'          >> data/config.yaml && \
+    echo '      port: 8081'             >> data/config.yaml && \
+    echo '      mode: GRPC'             >> data/config.yaml && \
+    echo '      probe_wait_time: "3s"'  >> data/config.yaml && \
+    echo '      http:'                  >> data/config.yaml && \
+    echo '        shutdown_duration: "5s"' >> data/config.yaml && \
+    echo '        handler_timeout: ""'  >> data/config.yaml && \
+    echo '        idle_timeout: ""'     >> data/config.yaml && \
+    echo '        read_header_timeout: ""' >> data/config.yaml && \
+    echo '        read_timeout: ""'     >> data/config.yaml && \
+    echo '        write_timeout: ""'    >> data/config.yaml && \
+    echo '  startup_strategy:'          >> data/config.yaml && \
+    echo '    - agent-grpc'             >> data/config.yaml && \
+    echo '  shutdown_strategy:'         >> data/config.yaml && \
+    echo '    - agent-grpc'             >> data/config.yaml && \
+    echo '  full_shutdown_duration: 600s' >> data/config.yaml && \
+    echo '  tls:'                       >> data/config.yaml && \
+    echo '    enabled: false'           >> data/config.yaml && \
+    echo 'ngt:'                         >> data/config.yaml && \
+    #    echo '  index_path: "/etc/server/backup"' >> data/config.yaml && \
+    echo '  dimension: 784'             >> data/config.yaml && \
+    echo '  bulk_insert_chunk_size: 10' >> data/config.yaml && \
+    echo '  distance_type: l2'          >> data/config.yaml && \
+    echo '  object_type: float'         >> data/config.yaml && \
+    echo '  creation_edge_size: 20'     >> data/config.yaml && \
+    echo '  search_edge_size: 10'       >> data/config.yaml && \
+    echo '  auto_index_duration_limit: 1m' >> data/config.yaml && \
+    echo '  auto_index_check_duration: 10s' >> data/config.yaml && \
+    echo '  auto_index_length: 100'      >> data/config.yaml && \
+    echo '  auto_save_index_duration: 90s' >> data/config.yaml && \
+    echo '  initial_delay_max_duration: 60s' >> data/config.yaml && \
+    echo '  default_pool_size: 500'      >> data/config.yaml && \
+    rm -rf .git
+
+FROM vdaas/vald-agent-ngt
+COPY --from=configgen /tmp/vald/data/config.yaml /etc/server/config.yaml
+
+EXPOSE 8081
