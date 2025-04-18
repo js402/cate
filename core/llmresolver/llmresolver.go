@@ -4,6 +4,7 @@ package llmresolver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -187,13 +188,26 @@ func ResolveChat(
 	return provider.GetChatConnection(backend)
 }
 
+type ResolveEmbedRequest struct {
+	ModelName string
+	Provider  string // Optional. Empty uses default.
+}
+
 // ResolveEmbed finds a provider supporting embeddings
 func ResolveEmbed(
 	ctx context.Context,
-	req ResolveRequest,
+	embedReq ResolveEmbedRequest,
 	getModels modelprovider.RuntimeState,
 	resolver Resolver,
 ) (serverops.LLMEmbedClient, error) {
+	if embedReq.ModelName == "" {
+		return nil, fmt.Errorf("model name is required")
+	}
+	req := ResolveRequest{
+		ModelNames:    []string{embedReq.ModelName},
+		Provider:      embedReq.Provider,
+		ContextLength: 0,
+	}
 	candidates, err := filterCandidates(ctx, req, getModels, modelprovider.Provider.CanEmbed)
 	if err != nil {
 		return nil, err
